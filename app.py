@@ -45,6 +45,8 @@ from src.news_sentiment import (
     sentiment_engine_availability,
     summarize_sentiment,
 )
+from src.sentiment_features import aggregate_daily_sentiment, build_latest_sentiment_feature_row
+from src.signal_fusion import build_signal_components_frame, fuse_prediction_with_sentiment
 
 
 st.set_page_config(page_title="Meroq", page_icon="📈", layout="wide")
@@ -217,6 +219,28 @@ with st.sidebar:
     )
 
     st.divider()
+    st.subheader("Signal fusion")
+    run_sentiment_fusion = st.checkbox(
+        "Use sentiment-aware signal overlay",
+        value=True,
+        key="run_sentiment_fusion_v70",
+        help=(
+            "Combines the base model probability with recent-news sentiment as a transparent overlay. "
+            "This is not a retrained historical sentiment model yet."
+        ),
+    )
+    sentiment_max_adjustment = st.slider(
+        "Max sentiment probability adjustment",
+        min_value=0.00,
+        max_value=0.15,
+        value=0.08,
+        step=0.01,
+        key="sentiment_max_adjustment_v70",
+        help="Caps how much recent news sentiment can move the model's up probability.",
+    )
+    st.caption("The overlay is conservative: sentiment can tilt the final signal, but it cannot dominate the ML model.")
+
+    st.divider()
     st.subheader("Model")
     model_label_to_name = {label: name for name, label in MODEL_LABELS.items()}
     selected_model_label = st.selectbox(
@@ -378,6 +402,7 @@ RUN_STAGES = [
     "Latest prediction",
     "Risk simulation",
     "News sentiment",
+    "Sentiment-aware signal",
     "Model comparison",
     "Primary walk-forward",
     "Walk-forward comparison",
@@ -482,7 +507,19 @@ def update_run_monitor(stage: str, status: str, detail: str = "", progress: int 
     render_run_details(progress=progress, progress_text=f"{stage}: {detail or status}")
 
 
-def render_summary_metrics(ticker: str, latest_close: float, latest_date, selected_model_label: str, prediction: dict, results: dict, wf_results, risk_results=None, sentiment_summary=None, analysis_mode: str = "Fast mode") -> None:
+def render_summary_metrics(
+    ticker: str,
+    latest_close: float,
+    latest_date,
+    selected_model_label: str,
+    prediction: dict,
+    results: dict,
+    wf_results,
+    risk_results=None,
+    sentiment_summary=None,
+    sentiment_fusion=None,
+    analysis_mode: str = "Fast mode",
+) -> None:
     with summary_placeholder.container():
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Ticker", ticker)
@@ -494,14 +531,19 @@ def render_summary_metrics(ticker: str, latest_close: float, latest_date, select
         if risk_results is not None:
             risk_outlook = risk_label(risk_results["summary"])
 
+        adjusted_signal = prediction["signal"]
+        adjusted_probability = prediction["up_probability"]
+        adjustment_text = "N/A"
+        if sentiment_fusion is not None and sentiment_fusion.get("available"):
+            adjusted_signal = sentiment_fusion["signal"]
+            adjusted_probability = sentiment_fusion["adjusted_up_probability"]
+            adjustment_text = f"{sentiment_fusion['adjustment_pct_points']:+.2f} pp"
+
         col5, col6, col7, col8 = st.columns(4)
-        col5.metric("Signal", prediction["signal"])
-        col6.metric("Up probability", f"{prediction['up_probability']:.1%}")
-        col7.metric("Risk-adjusted outlook", risk_outlook)
-        col8.metric(
-            "Walk-forward accuracy",
-            "Skipped" if wf_results is None else f"{wf_results['classification_metrics']['accuracy']:.1%}",
-        )
+        col5.metric("Base signal", prediction["signal"])
+        col6.metric("Base up probability", f"{prediction['up_probability']:.1%}")
+        col7.metric("Sentiment-aware signal", adjusted_signal, adjustment_text)
+        col8.metric("Adjusted up probability", f"{adjusted_probability:.1%}")
 
         sent_label = "Skipped"
         sent_score = "N/A"
@@ -510,12 +552,12 @@ def render_summary_metrics(ticker: str, latest_close: float, latest_date, select
             sent_score = f"{sentiment_summary.get('average_score', 0.0):+.2f}" if sentiment_summary.get("available") else "N/A"
         col9, col10, col11, col12 = st.columns(4)
         col9.metric("News sentiment", sent_label, sent_score)
-        col10.metric("Primary model", selected_model_label)
-        col11.metric("Simple test accuracy", f"{results['metrics']['accuracy']:.1%}")
+        col10.metric("Risk-adjusted outlook", risk_outlook)
+        col11.metric("Walk-forward accuracy", "Skipped" if wf_results is None else f"{wf_results['classification_metrics']['accuracy']:.1%}")
         col12.metric("Model confidence lens", "Low" if results['metrics']['accuracy'] < 0.52 else "Moderate")
 
 
-def render_prediction_section(latest_row, prediction: dict, results: dict, ticker: str, selected_model_label: str) -> None:
+def render_prediction_section(latest_row, prediction: dict, results: dict, ticker: str, selected_model_label: str, sentiment_fusion=None) -> None:
     with prediction_placeholder.container():
         left, right = st.columns([1, 1])
 
@@ -536,6 +578,24 @@ def render_prediction_section(latest_row, prediction: dict, results: dict, ticke
                     "ATR %": f"{float(latest_row['atr_pct']):.2%}",
                     "Bollinger position": round(float(latest_row["bb_position"]), 3),
                 }
+            )
+
+        st.subheader("Sentiment-aware signal overlay")
+        if sentiment_fusion is not None and sentiment_fusion.get("available"):
+            a, b, c, d = st.columns(4)
+            a.metric("Base up probability", f"{sentiment_fusion['base_up_probability']:.1%}")
+            b.metric("Sentiment adjustment", f"{sentiment_fusion['adjustment_pct_points']:+.2f} pp")
+            c.metric("Adjusted up probability", f"{sentiment_fusion['adjusted_up_probability']:.1%}")
+            d.metric("Final signal", sentiment_fusion["signal"])
+
+            st.info(f"{sentiment_fusion['explanation']} {sentiment_fusion['reason']}")
+            components = build_signal_components_frame(sentiment_fusion)
+            if not components.empty:
+                st.dataframe(components, width="stretch", hide_index=True)
+        else:
+            st.info(
+                "No sentiment overlay has been applied yet. Run News Sentiment and keep "
+                "**Use sentiment-aware signal overlay** enabled to see the adjusted signal."
             )
 
         st.subheader("Simple test split preview")
@@ -691,6 +751,14 @@ def render_sentiment_section(
             "url",
         ]
         existing_cols = [col for col in show_cols if col in sentiment_df.columns]
+        daily_sentiment = aggregate_daily_sentiment(sentiment_df, ticker=ticker)
+        with st.expander("Daily sentiment features", expanded=False):
+            if daily_sentiment.empty:
+                st.info("No daily sentiment features were created from the current headline set.")
+            else:
+                st.dataframe(daily_sentiment, width="stretch", hide_index=True)
+                st.caption("These aggregated daily fields are the basis for the next modeling step: joining sentiment to OHLCV rows.")
+
         with st.expander("Headline-level sentiment table", expanded=False):
             st.dataframe(sentiment_df[existing_cols], width="stretch", hide_index=True)
 
@@ -867,23 +935,23 @@ def render_roadmap_section() -> None:
         st.subheader("Production-minded upgrade path")
         st.markdown(
             """
-            **Current release: 0.6.0 — Local data layer and freshness controls.**
+            **Current release: 0.7.0 — Sentiment-aware signal fusion.**
 
-            This release strengthens the app before larger modeling changes:
+            This release adds a transparent sentiment-aware signal layer:
 
-            1. Tracks saved market data with ticker, interval, row count, date range, and refresh timestamp.
-            2. Adds a local news cache to reduce repeated API calls and speed up repeat sentiment runs.
-            3. Adds data inventory views so local storage is visible inside the app.
-            4. Adds refresh/inspection scripts for repeatable local data operations.
-            5. Keeps optional API keys local in `.env` and out of Git.
+            1. Keeps the base ML model probability visible.
+            2. Scores recent news with the selected sentiment engine.
+            3. Converts recent sentiment into a capped probability adjustment.
+            4. Shows the adjusted signal alongside the base signal.
+            5. Aggregates headline sentiment into daily features for future historical modeling.
 
             Next production-minded upgrades:
 
-            1. Save aggregated sentiment features as dated model features.
-            2. Compare model performance with and without sentiment features.
-            3. Add portfolio/watchlist dashboards over the default ticker universe.
-            4. Move from SQLite to PostgreSQL if the dataset or deployment needs grow.
-            5. Add scheduled refresh jobs after the local data contract is stable.
+            1. Persist daily sentiment feature tables over time.
+            2. Join historical sentiment features to OHLCV rows.
+            3. Compare model performance with and without sentiment features.
+            4. Add portfolio/watchlist dashboards over the default ticker universe.
+            5. Move from SQLite to PostgreSQL if the dataset or deployment needs grow.
             """
         )
 
@@ -992,6 +1060,7 @@ with risk_placeholder.container():
     st.info("Waiting for risk simulation...")
 with sentiment_placeholder.container():
     st.info("Waiting for news sentiment...")
+update_run_monitor("Sentiment-aware signal", "waiting", "Waiting for news sentiment", 0)
 with walk_forward_placeholder.container():
     st.info("Waiting for walk-forward settings...")
 with comparison_placeholder.container():
@@ -1151,7 +1220,57 @@ try:
         selected_sentiment_engine_label=selected_sentiment_engine_label,
         selected_news_source_label=selected_news_source_label,
     )
-    render_summary_metrics(ticker, latest_close, latest_date, selected_model_label, prediction, results, None, risk_results=risk_results, sentiment_summary=sentiment_summary, analysis_mode=analysis_mode)
+
+    sentiment_fusion = None
+    if run_sentiment_fusion and run_sentiment_analysis:
+        update_run_monitor(
+            "Sentiment-aware signal",
+            "running",
+            "Blending base model probability with recent-news sentiment",
+            53,
+        )
+        sentiment_fusion = fuse_prediction_with_sentiment(
+            prediction,
+            sentiment_summary,
+            max_adjustment=float(sentiment_max_adjustment),
+        )
+        if sentiment_fusion.get("available"):
+            update_run_monitor(
+                "Sentiment-aware signal",
+                "complete",
+                f"{sentiment_fusion['base_up_probability']:.1%} → {sentiment_fusion['adjusted_up_probability']:.1%}",
+                55,
+                f"Sentiment-aware signal: {sentiment_fusion['base_signal']} base signal became {sentiment_fusion['signal']} after a {sentiment_fusion['adjustment_pct_points']:+.2f} percentage-point sentiment adjustment.",
+            )
+        else:
+            update_run_monitor(
+                "Sentiment-aware signal",
+                "skipped",
+                "No usable sentiment overlay available",
+                55,
+            )
+    else:
+        update_run_monitor(
+            "Sentiment-aware signal",
+            "skipped",
+            "Disabled in sidebar or news sentiment skipped",
+            55,
+        )
+
+    render_prediction_section(latest_row, prediction, results, ticker, selected_model_label, sentiment_fusion=sentiment_fusion)
+    render_summary_metrics(
+        ticker,
+        latest_close,
+        latest_date,
+        selected_model_label,
+        prediction,
+        results,
+        None,
+        risk_results=risk_results,
+        sentiment_summary=sentiment_summary,
+        sentiment_fusion=sentiment_fusion,
+        analysis_mode=analysis_mode,
+    )
 
     update_run_monitor(
         "Model comparison",
@@ -1218,7 +1337,19 @@ try:
             83,
         )
 
-    render_summary_metrics(ticker, latest_close, latest_date, selected_model_label, prediction, results, wf_results, risk_results=risk_results, sentiment_summary=sentiment_summary, analysis_mode=analysis_mode)
+    render_summary_metrics(
+        ticker,
+        latest_close,
+        latest_date,
+        selected_model_label,
+        prediction,
+        results,
+        wf_results,
+        risk_results=risk_results,
+        sentiment_summary=sentiment_summary,
+        sentiment_fusion=sentiment_fusion,
+        analysis_mode=analysis_mode,
+    )
     render_walk_forward_section(wf_results, selected_model_label, interval, ticker)
 
     if run_wf_model_comparison:
@@ -1262,7 +1393,7 @@ try:
         "complete",
         "All result sections are ready",
         100,
-        "Dashboard is ready: Prediction, Chart, Risk Simulation, News Sentiment, Backtest, Model Comparison, Model Details, Data Manager, and Roadmap sections are loaded.",
+        "Dashboard is ready: Prediction, Chart, Risk Simulation, News Sentiment, Sentiment-aware Signal, Backtest, Model Comparison, Model Details, Data Manager, and Roadmap sections are loaded.",
     )
 
 except Exception as exc:

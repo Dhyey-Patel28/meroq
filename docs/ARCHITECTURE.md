@@ -28,3 +28,13 @@ Meroq is a local-first Streamlit application.
 ## Local-first design
 
 Meroq avoids paid hosted inference by default. Price/news data and model caches are local. Optional API keys are read from `.env` and never committed.
+
+
+## Sentiment-aware signal fusion
+
+The current prediction stack has two layers:
+
+1. **Base model layer** — technical indicators and price-derived features train a classifier that estimates next-period up probability.
+2. **Signal fusion layer** — recent-news sentiment is converted into a capped probability adjustment and shown separately from the base model output.
+
+This keeps the dashboard explainable while preparing the project for historical sentiment-aware training.

@@ -1,11 +1,27 @@
 # Changelog
 
+## 0.7.0 — Sentiment-aware signal fusion
+
+### Added
+
+- Conservative sentiment-aware probability overlay for the main prediction.
+- Signal fusion controls in the sidebar.
+- Prediction tab cards comparing base probability, sentiment adjustment, and adjusted probability.
+- Daily sentiment feature aggregation for future historical sentiment modeling.
+- `src/signal_fusion.py` and `src/sentiment_features.py`.
+- Documentation for the signal-fusion layer.
+
+### Changed
+
+- News sentiment output now includes daily sentiment feature rows.
+- Top metrics now distinguish base model probability from sentiment-aware probability.
+
 ## 0.6.1 — Unified dependency setup
 
 ### Changed
 
 - Consolidated app, NLP, and research dependencies into a single `requirements.txt`.
-- Removed separate `requirements.txt` and `requirements.txt` files.
+- Removed separate NLP/research requirements files.
 - Updated app/help text and setup docs to use one install command.
 
 ## 0.6.0 — Local data layer and freshness controls

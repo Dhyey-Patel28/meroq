@@ -6,15 +6,17 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**0.6.1 — Unified dependency setup**
+**0.7.0 — Sentiment-aware signal fusion**
 
-This release strengthens the product foundation before sentiment-aware model training:
+This release adds a transparent signal-fusion layer that combines the base ML prediction with recent-news sentiment:
 
 - Local SQLite market-data inventory with refresh metadata
 - Local SQLite news cache to reduce repeated API calls
-- Data Manager views for database files, market tables, and news cache coverage
 - Multi-source news aggregation with yfinance, Finnhub, and optional NewsAPI
 - Local Hugging Face finance sentiment engines installed through a single `requirements.txt`
+- Sentiment-aware signal overlay that keeps the base model probability visible
+- Conservative probability adjustment from recent-news sentiment
+- Daily sentiment feature aggregation for future historical sentiment modeling
 - Scripts for data refresh, data-store inspection, news smoke tests, and model downloads
 
 ## Core capabilities
@@ -38,6 +40,8 @@ This release strengthens the product foundation before sentiment-aware model tra
 - Run Monte Carlo price-risk simulation
 - Fetch recent company headlines
 - Score headlines with lightweight or local Hugging Face financial sentiment models
+- Combine model probability with recent-news sentiment as a transparent signal overlay
+- Aggregate headline sentiment into daily feature rows
 - Cache market/news data locally
 
 ## Installation
@@ -89,6 +93,7 @@ Use these settings first:
 - News source: `All configured sources, recommended`
 - Sentiment engine: `Lightweight financial lexicon`
 - Run walk-forward comparison: off
+- Use sentiment-aware signal overlay: on
 
 After the basic run works, try:
 
@@ -149,6 +154,8 @@ meroq/
 │   ├── features.py
 │   ├── model.py
 │   ├── news_sentiment.py
+│   ├── sentiment_features.py
+│   ├── signal_fusion.py
 │   ├── risk_simulation.py
 │   └── storage.py
 ├── docs/
