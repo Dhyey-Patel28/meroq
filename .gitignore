@@ -1,14 +1,34 @@
 .venv/
 __pycache__/
-*.pyc
-.DS_Store
+*.py[cod]
+*$py.class
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Local data and model artifacts
+data/*.sqlite
+data/*.db
+data/*.parquet
+data/*.csv
+models/
+artifacts/
+.cache/
+
+# Notebook/runtime outputs
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-data/*.sqlite
-data/*.db
-models/
-.env
-.streamlit/secrets.toml
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
 
 !data/.gitkeep
