@@ -1,34 +1,40 @@
+# Python
 .venv/
+venv/
+env/
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Environment and secrets
-.env
-.env.*
-!.env.example
-.streamlit/secrets.toml
-
-# Local data and model artifacts
-data/*.sqlite
-data/*.db
-data/*.parquet
-data/*.csv
-models/
-artifacts/
-.cache/
-
-# Notebook/runtime outputs
-.ipynb_checkpoints/
-notebooks/.ipynb_checkpoints/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
 
-# OS/editor files
+# OS / editor
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 
+# Local secrets
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Local generated data
+data/*.sqlite
+data/*.sqlite-*
+data/*.db
+data/*.db-*
+data/news_cache.sqlite
+data/market_data.sqlite
+models/
+hf_cache/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Keep data directory present
 !data/.gitkeep

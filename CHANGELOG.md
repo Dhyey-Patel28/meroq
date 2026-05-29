@@ -1,24 +1,97 @@
 # Changelog
 
-## 0.5.2 — Sentiment intelligence and project cleanup
+## 0.6.1 — Unified dependency setup
 
-- Added all-configured news source aggregation.
-- Added local news caching through SQLite.
-- Added NewsAPI development/testing label and safer source metadata.
-- Added source coverage display in the News Sentiment tab.
-- Added research notebooks and notebook requirements.
-- Reworked README and docs to be public-repo friendly.
-- Added `.gitattributes` for cleaner line endings on Windows.
-- Removed process-oriented stage-planning documents from the public package.
+### Changed
 
-## 0.5.1 — Local finance sentiment ensemble
+- Consolidated app, NLP, and research dependencies into a single `requirements.txt`.
+- Removed separate `requirements.txt` and `requirements.txt` files.
+- Updated app/help text and setup docs to use one install command.
 
-- Added optional Hugging Face finance sentiment engines.
-- Added fallback behavior when NLP dependencies are unavailable.
-- Added optional Finnhub and NewsAPI key support through `.env`.
+## 0.6.0 — Local data layer and freshness controls
 
-## 0.4.x — Risk simulation and product UX
+### Added
 
-- Added Monte Carlo risk simulation.
-- Added Results and Run Details layout.
-- Added analysis modes and safer defaults.
+- Local market-data inventory table with ticker, interval, row count, date range, and refresh timestamp.
+- Local news cache in `data/news_cache.sqlite`.
+- Data Manager views for database files, market data inventory, and news cache inventory.
+- News source option for all configured sources.
+- News lookback, cache, and force-refresh controls in the sidebar.
+- Refresh and inspection scripts:
+  - `scripts/refresh_data.py`
+  - `scripts/inspect_data_store.py`
+  - `scripts/news_smoke_test.py`
+  - `scripts/download_hf_models.py`
+- `src/storage.py` for SQLite metadata, news cache, and local data inspection.
+
+### Changed
+
+- Price downloads now record metadata after saving to SQLite.
+- News fetching can reuse local cache to reduce repeated API calls.
+- Production roadmap now emphasizes local data contracts before scheduled jobs or hosted infrastructure.
+
+## 0.5.2 — Public project polish and sentiment research structure
+
+### Added
+
+- Product-style documentation.
+- Optional NLP and research requirements files.
+- Research notebooks for price features, news sentiment, model comparison, and risk simulation.
+- `.env.example` and `.gitattributes`.
+
+### Changed
+
+- Removed prototype-stage planning docs from the public-facing repo structure.
+
+## 0.5.1 — Free finance sentiment ensemble
+
+### Added
+
+- Local Hugging Face finance sentiment model options:
+  - `ProsusAI/finbert`
+  - `yiyanghkust/finbert-tone`
+  - `mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis`
+- Ensemble sentiment mode.
+- Lightweight financial lexicon fallback.
+- Optional Finnhub and NewsAPI integrations.
+
+## 0.5.0 — News sentiment foundation
+
+### Added
+
+- News Sentiment tab.
+- Recent ticker headline fetching.
+- Sentiment summary cards and charts.
+
+## 0.4.0 — Monte Carlo risk simulation
+
+### Added
+
+- Risk Simulation tab.
+- Simulated price paths.
+- Return distribution and downside probability metrics.
+
+## 0.3.0 — Advanced model comparison
+
+### Added
+
+- Multi-model comparison.
+- Additional tree/boosting/ensemble models.
+- Two-tab UX with Results and Run Details.
+
+## 0.2.0 — Walk-forward backtesting
+
+### Added
+
+- Walk-forward validation.
+- Equity curves.
+- Trading metrics with transaction costs.
+
+## 0.1.0 — Starter dashboard
+
+### Added
+
+- Streamlit app.
+- yfinance data download.
+- Technical indicators.
+- XGBoost baseline prediction.

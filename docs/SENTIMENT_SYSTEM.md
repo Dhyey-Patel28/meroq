@@ -1,6 +1,6 @@
-# Sentiment system
+# Sentiment System
 
-Meroq supports a local-first sentiment architecture.
+Meroq provides a layered sentiment system.
 
 ## Engines
 
@@ -10,14 +10,14 @@ Meroq supports a local-first sentiment architecture.
 - `mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis`
 - Finance sentiment ensemble
 
-## Local model behavior
+## Fallback behavior
 
-Hugging Face models are loaded through `transformers` and cached locally after the first download. No Hugging Face inference API is used by the app.
+If optional NLP packages are not installed or a Hugging Face model cannot load, the app falls back to the lightweight financial lexicon.
 
-## Ensemble logic
+## Local inference
 
-The ensemble averages positive, neutral, and negative probabilities across available finance models. If a model cannot load, Meroq skips it. If no Hugging Face model can load, the lightweight fallback is used.
+Hugging Face models run locally after first download. No Hugging Face API key is required for the public models used here.
 
 ## Current limitation
 
-Sentiment is currently contextual. It is shown in the dashboard but is not yet persisted as a historical feature for model training. The next research milestone is to align historical sentiment with returns and compare models with and without sentiment features.
+Sentiment is currently displayed as context. The next modeling step is to save dated sentiment features and compare models with vs. without sentiment features.

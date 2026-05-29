@@ -1,4 +1,0 @@
--r requirements-nlp.txt
-jupyter>=1.0
-ipykernel>=6.29
-matplotlib>=3.8

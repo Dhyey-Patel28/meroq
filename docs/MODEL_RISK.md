@@ -1,21 +1,30 @@
-# Model and risk notes
+# Model Risk
 
-Meroq predicts direction probabilities, not guaranteed prices.
+Meroq is not financial advice.
 
-## Evaluation approach
+Market direction prediction is noisy. Accuracy can look low even when a model provides useful ranking, probability, or risk context.
 
-- Simple chronological split for quick comparison
-- Walk-forward validation for more realistic repeated future-window testing
-- Transaction-cost-aware strategy metrics
-- Buy-and-hold comparison
+## Common risks
 
-## Risk simulation
+- Look-ahead bias
+- Overfitting
+- Unstable market regimes
+- Transaction costs
+- Survivorship bias
+- News timing mismatch
+- API/data quality issues
 
-Monte Carlo simulation estimates future price ranges using recent volatility and selected drift assumptions. It is a risk lens, not a forecast guarantee.
+## Mitigations currently included
 
-## Common interpretation mistakes
+- Chronological train/test splits
+- Walk-forward validation
+- Transaction cost setting
+- Baseline model comparison
+- Risk simulation separate from deterministic prediction
 
-- A high up-probability does not mean the stock will rise.
-- A model can have acceptable classification metrics and still be unprofitable after costs.
-- A strategy can look good on one ticker and fail on another.
-- Sentiment can be useful context without being predictive by itself.
+## Next mitigations
+
+- Sentiment-aware backtesting
+- Regime-aware features
+- Portfolio-level evaluation
+- Data quality reports

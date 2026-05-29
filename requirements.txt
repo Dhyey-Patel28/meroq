@@ -1,11 +1,35 @@
+# Meroq runtime, NLP, and research dependencies
+#
+# Single-file install:
+#   python -m pip install -r requirements.txt
+#
+# Notes:
+# - Hugging Face finance sentiment models run locally through transformers/torch.
+# - Jupyter dependencies are included so the research notebooks work out of the box.
+# - API keys are not dependencies; place optional keys in a local .env file.
+
+# App/UI
 streamlit>=1.45,<2.0
+plotly>=5.24,<7.0
+
+# Market data and data processing
 yfinance>=0.2.60,<2.0
 pandas>=2.2,<3.0
 numpy>=1.26,<3.0
+requests>=2.31,<3.0
+
+# Technical indicators and modeling
 ta>=0.11,<1.0
 scikit-learn>=1.5,<2.0
 xgboost>=2.1,<4.0
 lightgbm>=4.3,<5.0
 catboost>=1.2,<2.0
-plotly>=5.24,<7.0
-requests>=2.31,<3.0
+
+# Local NLP sentiment models
+transformers>=4.41,<5.0
+torch>=2.2
+
+# Research notebooks
+jupyter>=1.0,<2.0
+ipykernel>=6.29,<7.0
+matplotlib>=3.8,<4.0

@@ -1,28 +1,26 @@
-# Data sources
-
-Meroq is designed to run locally without paid data dependencies.
+# Data Sources
 
 ## Price data
 
-The app uses `yfinance` for historical OHLCV research data. Data is cached locally in `data/market_data.sqlite`.
+Meroq uses `yfinance` for OHLCV history. This is appropriate for research and education but not guaranteed for production-grade trading systems.
 
 ## News data
 
-Supported sources:
+Meroq supports:
 
-| Source | Key required | Usage in Meroq |
-|---|---:|---|
-| yfinance news | No | Default no-key fallback |
-| Finnhub company news | Yes | Optional user key from `.env` |
-| NewsAPI | Yes | Optional local development/testing provider |
+- yfinance news: no API key.
+- Finnhub: optional user-provided free key.
+- NewsAPI: optional user-provided developer key.
 
-## API key handling
+The recommended app setting is **All configured sources**. It combines no-key yfinance headlines with any optional local keys present in `.env`.
 
-- Keys are read from `.env`.
-- `.env` is ignored by Git.
-- Keys are not stored in source files.
-- News results can be cached locally in `data/news_cache.sqlite` to reduce repeated requests.
+## API key policy
 
-## NewsAPI note
+Meroq does not provide, store, sell, or proxy API keys. Users must bring their own keys and follow provider terms. Real keys belong in `.env`, which is ignored by Git.
 
-NewsAPI support is included for local development/testing with a user-provided key. Do not use a free NewsAPI Developer key in a hosted production deployment unless your NewsAPI plan permits that use.
+## Local cache
+
+Market data is stored in `data/market_data.sqlite`.
+News data is stored in `data/news_cache.sqlite`.
+
+Both generated database files are ignored by Git.

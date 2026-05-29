@@ -1,19 +1,16 @@
-# Research notebooks
+# Research Notebooks
 
-The notebooks are intended for experiments outside the Streamlit UI.
+The notebooks are intended for reproducible exploration, not production app logic.
 
 ## Included notebooks
 
-- `01_price_feature_audit.ipynb` — inspect downloaded data and engineered features
-- `02_news_sentiment_research.ipynb` — test news providers and sentiment engines
-- `03_model_comparison_research.ipynb` — compare models outside the UI
-- `04_risk_simulation_research.ipynb` — inspect Monte Carlo assumptions and output
+- `01_price_feature_audit.ipynb`
+- `02_news_sentiment_research.ipynb`
+- `03_model_comparison_research.ipynb`
+- `04_risk_simulation_research.ipynb`
 
-## Setup
+## Suggested workflow
 
-```powershell
-python -m pip install -r requirements-research.txt
-python -m ipykernel install --user --name meroq --display-name "Python (Meroq)"
-```
-
-These notebooks are original Meroq notebooks and are safe to commit. Do not commit downloaded datasets, model weights, `.env`, or local SQLite databases.
+1. Use the Streamlit app to validate end-to-end behavior.
+2. Use notebooks to investigate specific assumptions.
+3. Promote only stable findings into `src/`.
