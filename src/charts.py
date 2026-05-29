@@ -280,3 +280,74 @@ def make_final_return_distribution_chart(final_distribution: pd.DataFrame, ticke
     fig.update_layout(height=460, xaxis_title="Final return", yaxis_title="Simulation count")
     fig.update_xaxes(tickformat=".0%")
     return fig
+
+
+def make_sentiment_label_chart(sentiment_df: pd.DataFrame, ticker: str) -> go.Figure:
+    """Plot headline count by sentiment label."""
+    if sentiment_df is None or sentiment_df.empty or "sentiment_label" not in sentiment_df.columns:
+        fig = go.Figure()
+        fig.update_layout(title=f"{ticker.upper()} News Sentiment Mix", height=360)
+        return fig
+
+    label_order = ["Positive", "Neutral", "Negative"]
+    counts = sentiment_df["sentiment_label"].value_counts().reindex(label_order, fill_value=0).reset_index()
+    counts.columns = ["sentiment_label", "headline_count"]
+    fig = px.bar(
+        counts,
+        x="sentiment_label",
+        y="headline_count",
+        text="headline_count",
+        title=f"{ticker.upper()} News Sentiment Mix",
+    )
+    fig.update_traces(textposition="outside")
+    fig.update_layout(height=360, xaxis_title="Sentiment", yaxis_title="Headlines")
+    return fig
+
+
+def make_sentiment_score_chart(sentiment_df: pd.DataFrame, ticker: str) -> go.Figure:
+    """Plot sentiment scores by recent headline."""
+    if sentiment_df is None or sentiment_df.empty or "sentiment_score" not in sentiment_df.columns:
+        fig = go.Figure()
+        fig.update_layout(title=f"{ticker.upper()} Headline Sentiment Scores", height=480)
+        return fig
+
+    data = sentiment_df.copy().head(20)
+    data["sentiment_score"] = pd.to_numeric(data["sentiment_score"], errors="coerce")
+    data["headline"] = data.get("short_title", data.get("title", "")).astype(str).str.slice(0, 90)
+    data = data.dropna(subset=["sentiment_score"]).iloc[::-1]
+
+    fig = px.bar(
+        data,
+        x="sentiment_score",
+        y="headline",
+        orientation="h",
+        title=f"{ticker.upper()} Recent Headline Sentiment Scores",
+        hover_data=[col for col in ["publisher", "sentiment_label", "confidence"] if col in data.columns],
+    )
+    fig.update_layout(height=max(420, 28 * len(data) + 160), xaxis_title="Sentiment score", yaxis_title="Headline")
+    fig.update_xaxes(range=[-1, 1])
+    return fig
+
+
+def make_sentiment_timeline_chart(sentiment_df: pd.DataFrame, ticker: str) -> go.Figure:
+    """Plot daily average sentiment where dates are available."""
+    if sentiment_df is None or sentiment_df.empty or "published_at" not in sentiment_df.columns:
+        fig = go.Figure()
+        fig.update_layout(title=f"{ticker.upper()} Sentiment Timeline", height=360)
+        return fig
+
+    data = sentiment_df.copy()
+    data["published_at"] = pd.to_datetime(data["published_at"], errors="coerce")
+    data["sentiment_score"] = pd.to_numeric(data["sentiment_score"], errors="coerce")
+    data = data.dropna(subset=["published_at", "sentiment_score"])
+    if data.empty:
+        fig = go.Figure()
+        fig.update_layout(title=f"{ticker.upper()} Sentiment Timeline", height=360)
+        return fig
+
+    data["date"] = data["published_at"].dt.date
+    daily = data.groupby("date", as_index=False).agg(avg_sentiment=("sentiment_score", "mean"), headlines=("sentiment_score", "size"))
+    fig = px.line(daily, x="date", y="avg_sentiment", markers=True, title=f"{ticker.upper()} Daily Average News Sentiment")
+    fig.update_layout(height=360, xaxis_title="Date", yaxis_title="Average sentiment")
+    fig.update_yaxes(range=[-1, 1])
+    return fig

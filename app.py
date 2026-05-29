@@ -16,6 +16,9 @@ from src.charts import (
     make_monte_carlo_percentile_chart,
     make_monte_carlo_sample_paths_chart,
     make_final_return_distribution_chart,
+    make_sentiment_label_chart,
+    make_sentiment_score_chart,
+    make_sentiment_timeline_chart,
     make_probability_backtest_chart,
     make_probability_gauge,
     make_walk_forward_model_return_chart,
@@ -32,12 +35,21 @@ from src.model import (
     train_classifier,
 )
 from src.risk_simulation import risk_label, simulate_price_paths
+from src.news_sentiment import (
+    NEWS_SOURCE_OPTIONS,
+    SENTIMENT_ENGINE_OPTIONS,
+    analyze_news_sentiment,
+    fetch_news_for_ticker,
+    sentiment_context_sentence,
+    sentiment_engine_availability,
+    summarize_sentiment,
+)
 
 
 st.set_page_config(page_title="Meroq", page_icon="📈", layout="wide")
 
 st.title("📈 Meroq")
-st.caption("Predictive market intelligence with advanced model comparison, sentiment, risk, and signal modeling.")
+st.caption("Predictive market intelligence with advanced model comparison, news sentiment, risk, and signal modeling.")
 
 CORE_MODEL_NAMES = ["momentum_baseline", "logistic_regression", "random_forest", "xgboost"]
 ADVANCED_MODEL_NAMES = MODEL_NAMES
@@ -53,7 +65,7 @@ with st.sidebar:
         "Analysis mode",
         options=["Fast mode", "Research mode", "Full analysis mode", "Custom"],
         index=0,
-        key="analysis_mode_v42",
+        key="analysis_mode_v52",
         help=(
             "Fast mode keeps the app responsive. Research mode adds the primary walk-forward backtest. "
             "Full analysis mode intentionally enables heavier comparisons. Custom lets you choose manually."
@@ -105,28 +117,28 @@ with st.sidebar:
     run_risk_simulation = st.checkbox(
         "Run Monte Carlo risk simulation",
         value=True,
-        key="run_risk_simulation_v42",
+        key="run_risk_simulation_v52",
         help="Fast simulation that estimates future price ranges and downside risk from recent volatility.",
     )
     simulation_horizon = st.selectbox(
         "Simulation horizon",
         options=[10, 21, 30, 60, 90],
         index=2,
-        key="simulation_horizon_v42",
+        key="simulation_horizon_v52",
         help="Number of future trading periods to simulate. For daily data, 21 is about one month.",
     )
     simulation_paths = st.selectbox(
         "Simulation paths",
         options=[500, 1000, 2500, 5000],
         index=1,
-        key="simulation_paths_v42",
+        key="simulation_paths_v52",
         help="More paths create smoother distributions but take slightly longer.",
     )
     volatility_window = st.selectbox(
         "Volatility window",
         options=[20, 60, 126, 252],
         index=1,
-        key="volatility_window_v42",
+        key="volatility_window_v52",
         help="Recent periods used to estimate volatility for the simulation.",
     )
     drift_label_to_mode = {
@@ -139,10 +151,70 @@ with st.sidebar:
         "Drift assumption",
         options=list(drift_label_to_mode.keys()),
         index=3,
-        key="drift_assumption_v42",
+        key="drift_assumption_v52",
         help="Model-adjusted uses the ML probability as a conservative tilt, not as certainty.",
     )
     drift_mode = drift_label_to_mode[selected_drift_label]
+
+    st.divider()
+    st.subheader("News sentiment")
+    run_sentiment_analysis = st.checkbox(
+        "Run news sentiment analysis",
+        value=True,
+        key="run_sentiment_analysis_v52",
+        help="Fetches recent ticker news from free-safe sources and scores headlines with a selected sentiment engine.",
+    )
+    news_source_key_to_label = {key: label for key, label in NEWS_SOURCE_OPTIONS.items()}
+    news_source_label_to_key = {label: key for key, label in NEWS_SOURCE_OPTIONS.items()}
+    selected_news_source_label = st.selectbox(
+        "News source",
+        options=list(news_source_label_to_key.keys()),
+        index=list(news_source_label_to_key.keys()).index("All configured sources, recommended"),
+        key="news_source_v52",
+        help="yfinance requires no API key. Finnhub/NewsAPI are optional free developer sources and fall back safely if no key is found.",
+    )
+    selected_news_source = news_source_label_to_key[selected_news_source_label]
+
+    sentiment_engine_label_to_key = {label: key for key, label in SENTIMENT_ENGINE_OPTIONS.items()}
+    selected_sentiment_engine_label = st.selectbox(
+        "Sentiment engine",
+        options=list(sentiment_engine_label_to_key.keys()),
+        index=list(sentiment_engine_label_to_key.keys()).index("Lightweight financial lexicon"),
+        key="sentiment_engine_v52",
+        help="Hugging Face engines run locally after installing requirements-nlp.txt. Ensemble averages the available finance models.",
+    )
+    selected_sentiment_engine = sentiment_engine_label_to_key[selected_sentiment_engine_label]
+
+    max_news_items = st.selectbox(
+        "Max headlines",
+        options=[10, 20, 30, 50, 100],
+        index=2,
+        key="max_news_items_v52",
+        help="More headlines provide more context. Provider limits and ticker coverage may return fewer rows.",
+    )
+    news_days_back = st.selectbox(
+        "News lookback window",
+        options=[3, 7, 14, 30],
+        index=2,
+        key="news_days_back_v52",
+        help="Used by Finnhub and NewsAPI. yfinance returns its available recent ticker feed.",
+    )
+    use_news_cache = st.checkbox(
+        "Cache news locally",
+        value=True,
+        key="use_news_cache_v52",
+        help="Stores recent headline results in data/news_cache.sqlite to reduce repeat API calls.",
+    )
+    news_cache_ttl_minutes = st.selectbox(
+        "News cache refresh",
+        options=[15, 30, 60, 240, 1440],
+        index=2,
+        key="news_cache_ttl_minutes_v52",
+        help="How long cached headline results can be reused before refetching.",
+    )
+    st.caption(
+        "Keys are read from local .env only. Hugging Face sentiment models run locally after download; no Hugging Face API key is required for public models."
+    )
 
     st.divider()
     st.subheader("Model")
@@ -151,7 +223,7 @@ with st.sidebar:
         "Primary model",
         options=list(model_label_to_name.keys()),
         index=list(model_label_to_name.keys()).index(mode_settings["primary_model"]),
-        key="primary_model_v42",
+        key="primary_model_v52",
         help="This model is used for the main prediction and walk-forward backtest.",
     )
     selected_model_name = model_label_to_name[selected_model_label]
@@ -160,7 +232,7 @@ with st.sidebar:
         "Model comparison set",
         options=["Core fast", "Advanced all"],
         index=["Core fast", "Advanced all"].index(mode_settings["comparison_set"]),
-        key="comparison_set_v42",
+        key="comparison_set_v52",
         help="Core fast compares the four practical models. Advanced all includes heavier models like CatBoost and ensembles.",
     )
     comparison_model_names = CORE_MODEL_NAMES if comparison_set == "Core fast" else ADVANCED_MODEL_NAMES
@@ -182,7 +254,7 @@ with st.sidebar:
     run_primary_wf = st.checkbox(
         "Run primary walk-forward backtest",
         value=mode_settings["run_primary_wf"],
-        key="run_primary_wf_v42",
+        key="run_primary_wf_v52",
         help="Leave this off while testing. Turn it on when you want realistic repeated train/test evaluation.",
     )
     defaults = WALK_FORWARD_DEFAULTS.get(interval, WALK_FORWARD_DEFAULTS["1d"])
@@ -206,7 +278,7 @@ with st.sidebar:
     run_wf_model_comparison = st.checkbox(
         "Run walk-forward comparison for all models",
         value=mode_settings["run_wf_model_comparison"],
-        key="run_wf_model_comparison_v42",
+        key="run_wf_model_comparison_v52",
         help="More realistic but slower. Leave off while iterating quickly.",
     )
 
@@ -238,7 +310,7 @@ with st.sidebar:
             max_value=100,
             value=mode_settings["max_folds"],
             step=1,
-            key="max_recent_folds_v42",
+            key="max_recent_folds_v52",
             help="Keeps the app responsive by using the most recent folds if many are available.",
         )
 
@@ -257,11 +329,12 @@ results_root_tab, run_details_root_tab = st.tabs(["Results", "Run Details"])
 
 with results_root_tab:
     summary_placeholder = st.empty()
-    tab_prediction, tab_chart, tab_risk, tab_walk_forward, tab_comparison, tab_model, tab_data, tab_roadmap = st.tabs(
+    tab_prediction, tab_chart, tab_risk, tab_sentiment, tab_walk_forward, tab_comparison, tab_model, tab_data, tab_roadmap = st.tabs(
         [
             "Prediction",
             "Chart",
             "Risk Simulation",
+            "News Sentiment",
             "Walk-forward Backtest",
             "Model Comparison",
             "Model Details",
@@ -276,6 +349,8 @@ with results_root_tab:
         chart_placeholder = st.empty()
     with tab_risk:
         risk_placeholder = st.empty()
+    with tab_sentiment:
+        sentiment_placeholder = st.empty()
     with tab_walk_forward:
         walk_forward_placeholder = st.empty()
     with tab_comparison:
@@ -302,6 +377,7 @@ RUN_STAGES = [
     "Primary model",
     "Latest prediction",
     "Risk simulation",
+    "News sentiment",
     "Model comparison",
     "Primary walk-forward",
     "Walk-forward comparison",
@@ -327,6 +403,8 @@ def render_waiting_state() -> None:
         st.info("Chart will load after price data and indicators are ready.")
     with risk_placeholder.container():
         st.info("Risk simulation will load after the latest prediction is ready.")
+    with sentiment_placeholder.container():
+        st.info("News sentiment will load after recent headlines are fetched and scored.")
     with walk_forward_placeholder.container():
         st.info("Walk-forward results will appear here if enabled in the sidebar.")
     with comparison_placeholder.container():
@@ -404,7 +482,7 @@ def update_run_monitor(stage: str, status: str, detail: str = "", progress: int 
     render_run_details(progress=progress, progress_text=f"{stage}: {detail or status}")
 
 
-def render_summary_metrics(ticker: str, latest_close: float, latest_date, selected_model_label: str, prediction: dict, results: dict, wf_results, risk_results=None, analysis_mode: str = "Fast mode") -> None:
+def render_summary_metrics(ticker: str, latest_close: float, latest_date, selected_model_label: str, prediction: dict, results: dict, wf_results, risk_results=None, sentiment_summary=None, analysis_mode: str = "Fast mode") -> None:
     with summary_placeholder.container():
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Ticker", ticker)
@@ -424,6 +502,17 @@ def render_summary_metrics(ticker: str, latest_close: float, latest_date, select
             "Walk-forward accuracy",
             "Skipped" if wf_results is None else f"{wf_results['classification_metrics']['accuracy']:.1%}",
         )
+
+        sent_label = "Skipped"
+        sent_score = "N/A"
+        if sentiment_summary is not None:
+            sent_label = sentiment_summary.get("overall_label", "No news")
+            sent_score = f"{sentiment_summary.get('average_score', 0.0):+.2f}" if sentiment_summary.get("available") else "N/A"
+        col9, col10, col11, col12 = st.columns(4)
+        col9.metric("News sentiment", sent_label, sent_score)
+        col10.metric("Primary model", selected_model_label)
+        col11.metric("Simple test accuracy", f"{results['metrics']['accuracy']:.1%}")
+        col12.metric("Model confidence lens", "Low" if results['metrics']['accuracy'] < 0.52 else "Moderate")
 
 
 def render_prediction_section(latest_row, prediction: dict, results: dict, ticker: str, selected_model_label: str) -> None:
@@ -514,6 +603,111 @@ def render_risk_simulation_section(risk_results: dict | None, ticker: str, inter
             ])
             st.dataframe(assumption_df, width="stretch")
 
+
+
+def render_sentiment_section(
+    sentiment_df: pd.DataFrame | None,
+    sentiment_summary: dict | None,
+    ticker: str,
+    news_meta: dict | None = None,
+    selected_sentiment_engine_label: str = "Lightweight financial lexicon",
+    selected_news_source_label: str = "yfinance news, no API key",
+) -> None:
+    """Render recent-news sentiment analysis."""
+    news_meta = news_meta or {}
+    with sentiment_placeholder.container():
+        st.subheader("News sentiment")
+        st.write(
+            "Stage 5.1 adds a free-safe financial NLP layer. Headlines can be scored with a lightweight fallback, "
+            "individual local Hugging Face finance models, or a local ensemble. Optional API keys are read from `.env` only."
+        )
+
+        with st.expander("Sentiment engine availability", expanded=False):
+            st.dataframe(sentiment_engine_availability(), width="stretch", hide_index=True)
+            st.caption("Hugging Face models run locally after the first download. Install optional NLP packages with `python -m pip install -r requirements-nlp.txt`.")
+
+        source_used = news_meta.get("source_used", "none")
+        source_note = f"Requested source: {selected_news_source_label}. Used source: {source_used}."
+        if news_meta.get("fallback_used"):
+            source_note += " Fallback was used."
+        if news_meta.get("notes"):
+            source_note += " " + " ".join(str(x) for x in news_meta.get("notes", []))
+        st.caption(source_note)
+        st.caption(f"Sentiment engine selected: {selected_sentiment_engine_label}")
+
+        source_counts = news_meta.get("source_counts") or {}
+        if source_counts:
+            with st.expander("News source coverage", expanded=False):
+                st.dataframe(
+                    pd.DataFrame([{"source": k, "headlines": v} for k, v in source_counts.items()]),
+                    width="stretch",
+                    hide_index=True,
+                )
+                cache_text = "yes" if news_meta.get("cache_hit") else "no"
+                st.caption(f"Cache hit: {cache_text}. Lookback window: {news_meta.get('days_back', 'N/A')} days.")
+
+        if sentiment_summary is None or not sentiment_summary.get("available"):
+            st.info("No recent headlines were returned or sentiment analysis was skipped.")
+            st.write("The model, chart, backtest, and risk simulation still work without news sentiment.")
+            return
+
+        st.info(sentiment_context_sentence(sentiment_summary))
+
+        a, b, c, d = st.columns(4)
+        a.metric("Overall sentiment", sentiment_summary["overall_label"], f"{sentiment_summary['average_score']:+.2f}")
+        b.metric("Headlines analyzed", sentiment_summary["headline_count"])
+        c.metric("Positive / negative", f"{sentiment_summary['positive_count']} / {sentiment_summary['negative_count']}")
+        d.metric("Avg confidence", f"{sentiment_summary['confidence']:.1%}")
+
+        e, f, g, h = st.columns(4)
+        e.metric("Source used", str(sentiment_summary.get("source_used", source_used)).title())
+        f.metric("Engine", str(sentiment_summary.get("engine", "unknown")).replace("_", " ").title())
+        agreement = sentiment_summary.get("agreement")
+        g.metric("Model agreement", "N/A" if agreement is None else f"{agreement:.1%}")
+        h.metric("Fallback used", "Yes" if news_meta.get("fallback_used") else "No")
+
+        left, right = st.columns([1, 2])
+        with left:
+            st.plotly_chart(
+                make_sentiment_label_chart(sentiment_df, ticker),
+                width="stretch",
+                key=f"sentiment_mix_{ticker}_{sentiment_summary['headline_count']}_{sentiment_summary.get('engine')}_{source_used}",
+            )
+        with right:
+            st.plotly_chart(
+                make_sentiment_timeline_chart(sentiment_df, ticker),
+                width="stretch",
+                key=f"sentiment_timeline_{ticker}_{sentiment_summary['headline_count']}_{sentiment_summary.get('engine')}_{source_used}",
+            )
+
+        st.plotly_chart(
+            make_sentiment_score_chart(sentiment_df, ticker),
+            width="stretch",
+            key=f"sentiment_scores_{ticker}_{sentiment_summary['headline_count']}_{sentiment_summary.get('engine')}_{source_used}",
+        )
+
+        show_cols = [
+            "published_at",
+            "source",
+            "publisher",
+            "sentiment_label",
+            "sentiment_score",
+            "confidence",
+            "positive_probability",
+            "neutral_probability",
+            "negative_probability",
+            "model_agreement",
+            "sentiment_engine_detail",
+            "title",
+            "url",
+        ]
+        existing_cols = [col for col in show_cols if col in sentiment_df.columns]
+        with st.expander("Headline-level sentiment table", expanded=False):
+            st.dataframe(sentiment_df[existing_cols], width="stretch", hide_index=True)
+
+        st.caption(
+            "Safety: no paid inference API is used. Optional Finnhub/NewsAPI keys are free-plan inputs only, read from local `.env`, and never committed."
+        )
 
 def render_walk_forward_section(wf_results, selected_model_label: str, interval: str, ticker: str) -> None:
     with walk_forward_placeholder.container():
@@ -661,26 +855,25 @@ def render_data_manager_section(raw_df: pd.DataFrame | None = None, model_frame:
 
 def render_roadmap_section() -> None:
     with roadmap_placeholder.container():
-        st.subheader("Production-minded upgrade path")
+        st.subheader("Product roadmap")
         st.markdown(
             """
-            **Current stage: Stage 4.2 — Stability, safe defaults, documentation, and Git readiness.**
+            **Current focus: local-first market intelligence with news sentiment.**
 
-            What this stage improves:
+            Near-term priorities:
 
-            1. Adds an **Analysis mode** selector so fast, research, and full runs are intentional.
-            2. Uses safe defaults: XGBoost, Core fast comparison, Monte Carlo on, slow walk-forward loops off.
-            3. Keeps product results in **Results** and operational status in **Run Details**.
-            4. Adds clearer risk interpretation and risk-adjusted outlook metrics.
-            5. Adds project documentation so the repo can be initialized cleanly before Stage 5.
+            1. Persist headline sentiment features into the local database.
+            2. Compare model performance with and without sentiment features.
+            3. Add historical news alignment for sentiment-aware backtesting.
+            4. Introduce macro and market-regime features such as index trend, volatility, rates, and sector context.
+            5. Move long-running research jobs into a backend service when the app outgrows Streamlit-only execution.
 
-            Next upgrades:
+            Data policy:
 
-            1. Add a news ingestion layer and FinBERT sentiment features.
-            2. Add API-key configuration through `.env` and Streamlit secrets.
-            3. Save sentiment features into the local database.
-            4. Compare model performance with and without sentiment features.
-            5. Move from SQLite to PostgreSQL once data grows.
+            - `.env` stays local and is never committed.
+            - Optional provider keys belong to the user.
+            - NewsAPI is supported only as a local development/testing provider unless the user has an appropriate plan.
+            - Hugging Face models run locally after download; no paid inference API is required.
             """
         )
 
@@ -787,6 +980,8 @@ with chart_placeholder.container():
     st.info("Waiting for price chart...")
 with risk_placeholder.container():
     st.info("Waiting for risk simulation...")
+with sentiment_placeholder.container():
+    st.info("Waiting for news sentiment...")
 with walk_forward_placeholder.container():
     st.info("Waiting for walk-forward settings...")
 with comparison_placeholder.container():
@@ -855,7 +1050,7 @@ try:
     )
     latest_close = float(raw_df["Close"].iloc[-1])
     latest_date = pd.to_datetime(raw_df["Date"].iloc[-1]).date()
-    render_summary_metrics(ticker, latest_close, latest_date, selected_model_label, prediction, results, None, risk_results=None, analysis_mode=analysis_mode)
+    render_summary_metrics(ticker, latest_close, latest_date, selected_model_label, prediction, results, None, risk_results=None, sentiment_summary=None, analysis_mode=analysis_mode)
     render_prediction_section(latest_row, prediction, results, ticker, selected_model_label)
 
     risk_results = None
@@ -892,6 +1087,61 @@ try:
         )
 
     render_risk_simulation_section(risk_results, ticker, interval, selected_drift_label)
+
+    sentiment_df = pd.DataFrame()
+    sentiment_summary = summarize_sentiment(sentiment_df)
+    news_meta = {"source_used": "none"}
+    if run_sentiment_analysis:
+        update_run_monitor(
+            "News sentiment",
+            "running",
+            f"Fetching up to {max_news_items} headlines for {ticker} via {selected_news_source_label}",
+            50,
+        )
+        news_df, news_meta = fetch_news_for_ticker(
+            ticker=ticker,
+            source=selected_news_source,
+            max_items=int(max_news_items),
+            days_back=int(news_days_back),
+            use_cache=bool(use_news_cache),
+            cache_ttl_minutes=int(news_cache_ttl_minutes),
+        )
+        update_run_monitor(
+            "News sentiment",
+            "running",
+            f"Scoring {len(news_df):,} headlines with {selected_sentiment_engine_label}",
+            51,
+        )
+        sentiment_df = analyze_news_sentiment(news_df, engine=selected_sentiment_engine)
+        sentiment_summary = summarize_sentiment(sentiment_df)
+        if sentiment_summary.get("available"):
+            update_run_monitor(
+                "News sentiment",
+                "complete",
+                f"{sentiment_summary['headline_count']} headlines; {sentiment_summary['overall_label']} overall",
+                52,
+                f"News sentiment complete: {sentiment_summary['overall_label']} average score {sentiment_summary['average_score']:+.2f} across {sentiment_summary['headline_count']} headlines.",
+            )
+        else:
+            update_run_monitor(
+                "News sentiment",
+                "complete",
+                "No recent headlines returned",
+                52,
+                "News sentiment: no recent headlines were returned, so price/model/risk results remain the primary analysis.",
+            )
+    else:
+        update_run_monitor("News sentiment", "skipped", "Skipped in sidebar", 52)
+
+    render_sentiment_section(
+        sentiment_df,
+        sentiment_summary,
+        ticker,
+        news_meta=news_meta,
+        selected_sentiment_engine_label=selected_sentiment_engine_label,
+        selected_news_source_label=selected_news_source_label,
+    )
+    render_summary_metrics(ticker, latest_close, latest_date, selected_model_label, prediction, results, None, risk_results=risk_results, sentiment_summary=sentiment_summary, analysis_mode=analysis_mode)
 
     update_run_monitor(
         "Model comparison",
@@ -958,7 +1208,7 @@ try:
             83,
         )
 
-    render_summary_metrics(ticker, latest_close, latest_date, selected_model_label, prediction, results, wf_results, risk_results=risk_results, analysis_mode=analysis_mode)
+    render_summary_metrics(ticker, latest_close, latest_date, selected_model_label, prediction, results, wf_results, risk_results=risk_results, sentiment_summary=sentiment_summary, analysis_mode=analysis_mode)
     render_walk_forward_section(wf_results, selected_model_label, interval, ticker)
 
     if run_wf_model_comparison:
@@ -1002,7 +1252,7 @@ try:
         "complete",
         "All result sections are ready",
         100,
-        "Dashboard is ready: Prediction, Chart, Risk Simulation, Backtest, Model Comparison, Model Details, Data Manager, and Roadmap sections are loaded.",
+        "Dashboard is ready: Prediction, Chart, Risk Simulation, News Sentiment, Backtest, Model Comparison, Model Details, Data Manager, and Roadmap sections are loaded.",
     )
 
 except Exception as exc:
