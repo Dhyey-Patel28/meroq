@@ -25,6 +25,7 @@ from src.charts import (
 )
 from src.config import DEFAULT_WATCHLIST, SUGGESTED_INTERVALS, SUGGESTED_PERIODS, WALK_FORWARD_DEFAULTS
 from src.data_loader import fetch_price_data, list_saved_price_tables
+from src.storage import database_file_summary, inspect_market_database, inspect_news_cache
 from src.features import add_technical_features, build_model_frame
 from src.model import (
     MODEL_LABELS,
@@ -65,7 +66,7 @@ with st.sidebar:
         "Analysis mode",
         options=["Fast mode", "Research mode", "Full analysis mode", "Custom"],
         index=0,
-        key="analysis_mode_v52",
+        key="analysis_mode_v42",
         help=(
             "Fast mode keeps the app responsive. Research mode adds the primary walk-forward backtest. "
             "Full analysis mode intentionally enables heavier comparisons. Custom lets you choose manually."
@@ -117,28 +118,28 @@ with st.sidebar:
     run_risk_simulation = st.checkbox(
         "Run Monte Carlo risk simulation",
         value=True,
-        key="run_risk_simulation_v52",
+        key="run_risk_simulation_v42",
         help="Fast simulation that estimates future price ranges and downside risk from recent volatility.",
     )
     simulation_horizon = st.selectbox(
         "Simulation horizon",
         options=[10, 21, 30, 60, 90],
         index=2,
-        key="simulation_horizon_v52",
+        key="simulation_horizon_v42",
         help="Number of future trading periods to simulate. For daily data, 21 is about one month.",
     )
     simulation_paths = st.selectbox(
         "Simulation paths",
         options=[500, 1000, 2500, 5000],
         index=1,
-        key="simulation_paths_v52",
+        key="simulation_paths_v42",
         help="More paths create smoother distributions but take slightly longer.",
     )
     volatility_window = st.selectbox(
         "Volatility window",
         options=[20, 60, 126, 252],
         index=1,
-        key="volatility_window_v52",
+        key="volatility_window_v42",
         help="Recent periods used to estimate volatility for the simulation.",
     )
     drift_label_to_mode = {
@@ -151,7 +152,7 @@ with st.sidebar:
         "Drift assumption",
         options=list(drift_label_to_mode.keys()),
         index=3,
-        key="drift_assumption_v52",
+        key="drift_assumption_v42",
         help="Model-adjusted uses the ML probability as a conservative tilt, not as certainty.",
     )
     drift_mode = drift_label_to_mode[selected_drift_label]
@@ -161,7 +162,7 @@ with st.sidebar:
     run_sentiment_analysis = st.checkbox(
         "Run news sentiment analysis",
         value=True,
-        key="run_sentiment_analysis_v52",
+        key="run_sentiment_analysis_v51",
         help="Fetches recent ticker news from free-safe sources and scores headlines with a selected sentiment engine.",
     )
     news_source_key_to_label = {key: label for key, label in NEWS_SOURCE_OPTIONS.items()}
@@ -169,8 +170,8 @@ with st.sidebar:
     selected_news_source_label = st.selectbox(
         "News source",
         options=list(news_source_label_to_key.keys()),
-        index=list(news_source_label_to_key.keys()).index("All configured sources, recommended"),
-        key="news_source_v52",
+        index=0,
+        key="news_source_v51",
         help="yfinance requires no API key. Finnhub/NewsAPI are optional free developer sources and fall back safely if no key is found.",
     )
     selected_news_source = news_source_label_to_key[selected_news_source_label]
@@ -180,40 +181,39 @@ with st.sidebar:
         "Sentiment engine",
         options=list(sentiment_engine_label_to_key.keys()),
         index=list(sentiment_engine_label_to_key.keys()).index("Lightweight financial lexicon"),
-        key="sentiment_engine_v52",
-        help="Hugging Face engines run locally after installing requirements-nlp.txt. Ensemble averages the available finance models.",
+        key="sentiment_engine_v51",
+        help="Hugging Face engines run locally after installing requirements.txt. Ensemble averages the available finance models.",
     )
     selected_sentiment_engine = sentiment_engine_label_to_key[selected_sentiment_engine_label]
 
     max_news_items = st.selectbox(
         "Max headlines",
-        options=[10, 20, 30, 50, 100],
+        options=[10, 20, 30, 50],
         index=2,
-        key="max_news_items_v52",
-        help="More headlines provide more context. Provider limits and ticker coverage may return fewer rows.",
+        key="max_news_items_v60",
+        help="More headlines provide more context, but news sources may return fewer depending on ticker coverage.",
     )
-    news_days_back = st.selectbox(
+    news_lookback_days = st.selectbox(
         "News lookback window",
-        options=[3, 7, 14, 30],
-        index=2,
-        key="news_days_back_v52",
-        help="Used by Finnhub and NewsAPI. yfinance returns its available recent ticker feed.",
+        options=[7, 14, 30],
+        index=1,
+        key="news_lookback_days_v60",
+        help="Used by optional news APIs such as Finnhub and NewsAPI.",
     )
-    use_news_cache = st.checkbox(
+    cache_news_locally = st.checkbox(
         "Cache news locally",
         value=True,
-        key="use_news_cache_v52",
-        help="Stores recent headline results in data/news_cache.sqlite to reduce repeat API calls.",
+        key="cache_news_locally_v60",
+        help="Stores fetched headlines in data/news_cache.sqlite so repeat runs are faster and use fewer API calls.",
     )
-    news_cache_ttl_minutes = st.selectbox(
-        "News cache refresh",
-        options=[15, 30, 60, 240, 1440],
-        index=2,
-        key="news_cache_ttl_minutes_v52",
-        help="How long cached headline results can be reused before refetching.",
+    force_news_refresh = st.checkbox(
+        "Force news refresh",
+        value=False,
+        key="force_news_refresh_v60",
+        help="Ignore cached headlines for this run and request fresh headlines from configured sources.",
     )
     st.caption(
-        "Keys are read from local .env only. Hugging Face sentiment models run locally after download; no Hugging Face API key is required for public models."
+        "Free-safe design: yfinance needs no key; optional APIs read keys from .env only; Hugging Face models run locally after download."
     )
 
     st.divider()
@@ -223,7 +223,7 @@ with st.sidebar:
         "Primary model",
         options=list(model_label_to_name.keys()),
         index=list(model_label_to_name.keys()).index(mode_settings["primary_model"]),
-        key="primary_model_v52",
+        key="primary_model_v42",
         help="This model is used for the main prediction and walk-forward backtest.",
     )
     selected_model_name = model_label_to_name[selected_model_label]
@@ -232,7 +232,7 @@ with st.sidebar:
         "Model comparison set",
         options=["Core fast", "Advanced all"],
         index=["Core fast", "Advanced all"].index(mode_settings["comparison_set"]),
-        key="comparison_set_v52",
+        key="comparison_set_v42",
         help="Core fast compares the four practical models. Advanced all includes heavier models like CatBoost and ensembles.",
     )
     comparison_model_names = CORE_MODEL_NAMES if comparison_set == "Core fast" else ADVANCED_MODEL_NAMES
@@ -254,7 +254,7 @@ with st.sidebar:
     run_primary_wf = st.checkbox(
         "Run primary walk-forward backtest",
         value=mode_settings["run_primary_wf"],
-        key="run_primary_wf_v52",
+        key="run_primary_wf_v42",
         help="Leave this off while testing. Turn it on when you want realistic repeated train/test evaluation.",
     )
     defaults = WALK_FORWARD_DEFAULTS.get(interval, WALK_FORWARD_DEFAULTS["1d"])
@@ -278,7 +278,7 @@ with st.sidebar:
     run_wf_model_comparison = st.checkbox(
         "Run walk-forward comparison for all models",
         value=mode_settings["run_wf_model_comparison"],
-        key="run_wf_model_comparison_v52",
+        key="run_wf_model_comparison_v42",
         help="More realistic but slower. Leave off while iterating quickly.",
     )
 
@@ -310,7 +310,7 @@ with st.sidebar:
             max_value=100,
             value=mode_settings["max_folds"],
             step=1,
-            key="max_recent_folds_v52",
+            key="max_recent_folds_v42",
             help="Keeps the app responsive by using the most recent folds if many are available.",
         )
 
@@ -624,7 +624,7 @@ def render_sentiment_section(
 
         with st.expander("Sentiment engine availability", expanded=False):
             st.dataframe(sentiment_engine_availability(), width="stretch", hide_index=True)
-            st.caption("Hugging Face models run locally after the first download. Install optional NLP packages with `python -m pip install -r requirements-nlp.txt`.")
+            st.caption("Hugging Face models run locally after the first download. Install dependencies with `python -m pip install -r requirements.txt`.")
 
         source_used = news_meta.get("source_used", "none")
         source_note = f"Requested source: {selected_news_source_label}. Used source: {source_used}."
@@ -634,17 +634,6 @@ def render_sentiment_section(
             source_note += " " + " ".join(str(x) for x in news_meta.get("notes", []))
         st.caption(source_note)
         st.caption(f"Sentiment engine selected: {selected_sentiment_engine_label}")
-
-        source_counts = news_meta.get("source_counts") or {}
-        if source_counts:
-            with st.expander("News source coverage", expanded=False):
-                st.dataframe(
-                    pd.DataFrame([{"source": k, "headlines": v} for k, v in source_counts.items()]),
-                    width="stretch",
-                    hide_index=True,
-                )
-                cache_text = "yes" if news_meta.get("cache_hit") else "no"
-                st.caption(f"Cache hit: {cache_text}. Lookback window: {news_meta.get('days_back', 'N/A')} days.")
 
         if sentiment_summary is None or not sentiment_summary.get("available"):
             st.info("No recent headlines were returned or sentiment analysis was skipped.")
@@ -836,44 +825,65 @@ def render_model_details_section(results: dict, selected_model_label: str) -> No
 
 def render_data_manager_section(raw_df: pd.DataFrame | None = None, model_frame: pd.DataFrame | None = None) -> None:
     with data_manager_placeholder.container():
-        st.subheader("Saved local database")
+        st.subheader("Local data layer")
+        st.write(
+            "Meroq stores generated market and news data locally so repeat runs are faster, easier to inspect, "
+            "and less dependent on repeated API calls."
+        )
+
+        st.subheader("Database files")
+        st.dataframe(database_file_summary(), width="stretch", hide_index=True)
+
+        st.subheader("Market data inventory")
+        market_inventory = inspect_market_database()
+        if not market_inventory.empty:
+            st.dataframe(market_inventory, width="stretch", hide_index=True)
+        else:
+            st.info("No saved market tables found yet. Running the app or the refresh script will create them.")
+
+        st.subheader("News cache inventory")
+        news_inventory = inspect_news_cache()
+        if not news_inventory.empty:
+            st.dataframe(news_inventory, width="stretch", hide_index=True)
+        else:
+            st.info("No cached news rows found yet. Run News Sentiment with local caching enabled to create the cache.")
+
         saved_tables = list_saved_price_tables()
         if saved_tables:
-            st.write("Saved tables in `data/market_data.sqlite`:")
-            st.code("\n".join(saved_tables))
-        else:
-            st.write("No local SQLite tables found yet. Running the app or bootstrap script will create them.")
+            with st.expander("Raw saved price table names", expanded=False):
+                st.code("\n".join(saved_tables))
 
         if raw_df is not None:
-            st.subheader("Raw price data")
+            st.subheader("Latest raw price rows")
             st.dataframe(raw_df.tail(100), width="stretch")
 
         if model_frame is not None:
-            st.subheader("Model training data")
+            st.subheader("Latest model training rows")
             st.dataframe(model_frame.tail(100), width="stretch")
 
 
 def render_roadmap_section() -> None:
     with roadmap_placeholder.container():
-        st.subheader("Product roadmap")
+        st.subheader("Production-minded upgrade path")
         st.markdown(
             """
-            **Current focus: local-first market intelligence with news sentiment.**
+            **Current release: 0.6.0 — Local data layer and freshness controls.**
 
-            Near-term priorities:
+            This release strengthens the app before larger modeling changes:
 
-            1. Persist headline sentiment features into the local database.
+            1. Tracks saved market data with ticker, interval, row count, date range, and refresh timestamp.
+            2. Adds a local news cache to reduce repeated API calls and speed up repeat sentiment runs.
+            3. Adds data inventory views so local storage is visible inside the app.
+            4. Adds refresh/inspection scripts for repeatable local data operations.
+            5. Keeps optional API keys local in `.env` and out of Git.
+
+            Next production-minded upgrades:
+
+            1. Save aggregated sentiment features as dated model features.
             2. Compare model performance with and without sentiment features.
-            3. Add historical news alignment for sentiment-aware backtesting.
-            4. Introduce macro and market-regime features such as index trend, volatility, rates, and sector context.
-            5. Move long-running research jobs into a backend service when the app outgrows Streamlit-only execution.
-
-            Data policy:
-
-            - `.env` stays local and is never committed.
-            - Optional provider keys belong to the user.
-            - NewsAPI is supported only as a local development/testing provider unless the user has an appropriate plan.
-            - Hugging Face models run locally after download; no paid inference API is required.
+            3. Add portfolio/watchlist dashboards over the default ticker universe.
+            4. Move from SQLite to PostgreSQL if the dataset or deployment needs grow.
+            5. Add scheduled refresh jobs after the local data contract is stable.
             """
         )
 
@@ -1102,9 +1112,9 @@ try:
             ticker=ticker,
             source=selected_news_source,
             max_items=int(max_news_items),
-            days_back=int(news_days_back),
-            use_cache=bool(use_news_cache),
-            cache_ttl_minutes=int(news_cache_ttl_minutes),
+            days_back=int(news_lookback_days),
+            use_cache=bool(cache_news_locally),
+            force_refresh=bool(force_news_refresh),
         )
         update_run_monitor(
             "News sentiment",

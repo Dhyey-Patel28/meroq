@@ -7,9 +7,11 @@ import sqlite3
 import pandas as pd
 import yfinance as yf
 
+from src.storage import MARKET_DB_PATH, record_price_metadata
+
 
 DATA_DIR = Path("data")
-DB_PATH = DATA_DIR / "market_data.sqlite"
+DB_PATH = MARKET_DB_PATH
 PRICE_COLUMNS = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
 
 
@@ -104,7 +106,7 @@ def fetch_price_data(
     df = df.sort_values("Date").reset_index(drop=True)
 
     if save_to_sqlite:
-        save_prices_to_sqlite(df, ticker=ticker, interval=interval)
+        save_prices_to_sqlite(df, ticker=ticker, interval=interval, period=period)
 
     return df
 
@@ -113,14 +115,24 @@ def save_prices_to_sqlite(
     df: pd.DataFrame,
     ticker: str,
     interval: str = "1d",
+    period: str | None = None,
     db_path: Path = DB_PATH,
 ) -> None:
-    """Save price data to a local SQLite database."""
+    """Save price data to a local SQLite database and record refresh metadata."""
     DATA_DIR.mkdir(exist_ok=True)
     table_name = _safe_table_name(ticker, interval)
 
     with sqlite3.connect(db_path) as conn:
         df.to_sql(table_name, conn, if_exists="replace", index=False)
+
+    record_price_metadata(
+        table_name=table_name,
+        ticker=ticker,
+        interval=interval,
+        period=period,
+        df=df,
+        db_path=db_path,
+    )
 
 
 def load_prices_from_sqlite(

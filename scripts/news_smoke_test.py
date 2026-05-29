@@ -1,31 +1,38 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
+import sys
 
-from src.news_sentiment import analyze_news_sentiment, fetch_news_for_ticker, summarize_sentiment
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(PROJECT_ROOT))
+
+from src.news_sentiment import analyze_news_sentiment, fetch_news_for_ticker, summarize_sentiment  # noqa: E402
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Smoke-test Meroq news and sentiment providers.")
+    parser = argparse.ArgumentParser(description="Quickly test Meroq news sources and sentiment scoring.")
     parser.add_argument("--ticker", default="AAPL")
-    parser.add_argument("--source", default="all_configured")
+    parser.add_argument("--source", default="all_configured", choices=["all_configured", "yfinance", "finnhub", "newsapi", "auto_free"])
     parser.add_argument("--engine", default="lightweight")
     parser.add_argument("--max-items", type=int, default=20)
-    parser.add_argument("--days-back", type=int, default=14)
+    parser.add_argument("--force-refresh", action="store_true")
     args = parser.parse_args()
 
-    news_df, meta = fetch_news_for_ticker(
+    news, meta = fetch_news_for_ticker(
         ticker=args.ticker,
         source=args.source,
         max_items=args.max_items,
-        days_back=args.days_back,
+        force_refresh=args.force_refresh,
     )
-    print("News metadata:", meta)
-    print(news_df[[c for c in ["published_at", "source", "publisher", "title"] if c in news_df.columns]].head(10))
+    scored = analyze_news_sentiment(news, engine=args.engine)
+    summary = summarize_sentiment(scored)
 
-    sentiment_df = analyze_news_sentiment(news_df, engine=args.engine)
-    print("Sentiment summary:", summarize_sentiment(sentiment_df))
-    print(sentiment_df[[c for c in ["source", "sentiment_label", "sentiment_score", "confidence", "title"] if c in sentiment_df.columns]].head(10))
+    print("Meta:", meta)
+    print("Summary:", summary)
+    if not scored.empty:
+        cols = [col for col in ["published_at", "source", "publisher", "label", "score", "title"] if col in scored.columns]
+        print(scored[cols].head(args.max_items).to_string(index=False))
 
 
 if __name__ == "__main__":

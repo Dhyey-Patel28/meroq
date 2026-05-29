@@ -5,15 +5,14 @@ from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
-import hashlib
-import json
 import os
 import re
-import sqlite3
 
 import pandas as pd
 import requests
 import yfinance as yf
+
+from src.storage import load_news_from_cache, save_news_to_cache
 
 
 # -----------------------------------------------------------------------------
@@ -38,10 +37,10 @@ ENSEMBLE_ENGINES = ["prosus_finbert", "finbert_tone", "distilroberta_financial"]
 
 NEWS_SOURCE_OPTIONS = {
     "all_configured": "All configured sources, recommended",
-    "finnhub": "Finnhub company news, user key",
-    "yfinance": "yfinance news, no key",
-    "newsapi": "NewsAPI dev-only, user key",
-    "auto_free": "Auto fallback",
+    "yfinance": "yfinance news, no API key",
+    "finnhub": "Finnhub free API, optional key",
+    "newsapi": "NewsAPI developer API, optional key",
+    "auto_free": "Auto free fallback",
 }
 
 POSITIVE_TERMS = {
@@ -255,272 +254,179 @@ def fetch_newsapi_news(ticker: str, max_items: int = 20, days_back: int = 14) ->
     return pd.DataFrame(rows)
 
 
-
-# -----------------------------------------------------------------------------
-# News cache, aggregation, and source selection
-# -----------------------------------------------------------------------------
-
-NEWS_CACHE_DB = Path("data/news_cache.sqlite")
-
-
-def _safe_json_loads(value: str, default: Any):
-    try:
-        return json.loads(value)
-    except Exception:
-        return default
-
-
-def _cache_signature(ticker: str, source: str, max_items: int, days_back: int) -> str:
-    """Cache key that never includes API key values."""
-    key_presence = {
-        "finnhub": bool(_get_env_value("FINNHUB_API_KEY")),
-        "newsapi": bool(_get_env_value("NEWSAPI_API_KEY")),
-    }
-    payload = {
-        "ticker": ticker.upper().strip(),
-        "source": source,
-        "max_items": int(max_items),
-        "days_back": int(days_back),
-        "key_presence": key_presence,
-        "version": "news-cache-v2",
-    }
-    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
-
-
-def _ensure_news_cache() -> None:
-    NEWS_CACHE_DB.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(NEWS_CACHE_DB) as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS news_cache (
-                cache_key TEXT PRIMARY KEY,
-                ticker TEXT NOT NULL,
-                source TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                records_json TEXT NOT NULL,
-                meta_json TEXT NOT NULL
-            )
-            """
-        )
-
-
-def _read_news_cache(cache_key: str, ttl_minutes: int) -> tuple[pd.DataFrame, dict[str, Any]] | None:
-    if ttl_minutes <= 0 or not NEWS_CACHE_DB.exists():
-        return None
-    try:
-        with sqlite3.connect(NEWS_CACHE_DB) as conn:
-            row = conn.execute(
-                "SELECT created_at, records_json, meta_json FROM news_cache WHERE cache_key = ?",
-                (cache_key,),
-            ).fetchone()
-    except Exception:
-        return None
-
-    if not row:
-        return None
-    created_at = pd.to_datetime(row[0], errors="coerce")
-    if pd.isna(created_at):
-        return None
-    age_minutes = (datetime.utcnow() - created_at.to_pydatetime()).total_seconds() / 60
-    if age_minutes > ttl_minutes:
-        return None
-
-    records = _safe_json_loads(row[1], [])
-    meta = _safe_json_loads(row[2], {})
-    df = pd.DataFrame(records)
-    if "published_at" in df.columns:
-        df["published_at"] = pd.to_datetime(df["published_at"], errors="coerce")
-    meta["cache_hit"] = True
-    meta["cache_age_minutes"] = round(age_minutes, 1)
-    return df, meta
-
-
-def _write_news_cache(cache_key: str, ticker: str, source: str, df: pd.DataFrame, meta: dict[str, Any]) -> None:
-    try:
-        _ensure_news_cache()
-        cache_meta = dict(meta)
-        cache_meta["cache_hit"] = False
-        records_json = df.to_json(orient="records", date_format="iso") if df is not None else "[]"
-        with sqlite3.connect(NEWS_CACHE_DB) as conn:
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO news_cache(cache_key, ticker, source, created_at, records_json, meta_json)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    cache_key,
-                    ticker.upper().strip(),
-                    source,
-                    datetime.utcnow().isoformat(),
-                    records_json,
-                    json.dumps(cache_meta, default=str),
-                ),
-            )
-    except Exception:
-        # Cache failures should never break the app.
-        return
-
-
-def _news_dedupe_key(row: pd.Series) -> str:
-    url = str(row.get("url", "") or "").strip().lower()
-    if url:
-        return "url:" + url
-    title = str(row.get("title", "") or "").lower()
-    title = re.sub(r"[^a-z0-9]+", " ", title).strip()
-    return "title:" + title[:140]
-
-
-def _combine_news_frames(frames: list[pd.DataFrame], max_items: int) -> pd.DataFrame:
-    valid = [df.copy() for df in frames if df is not None and not df.empty]
-    if not valid:
+def _deduplicate_news(df: pd.DataFrame, max_items: int) -> pd.DataFrame:
+    """Deduplicate news by URL/title while preserving source coverage."""
+    if df is None or df.empty:
         return pd.DataFrame()
-    combined = pd.concat(valid, ignore_index=True)
-    if combined.empty:
-        return combined
-    combined["_dedupe_key"] = combined.apply(_news_dedupe_key, axis=1)
-    combined = combined.drop_duplicates(subset=["_dedupe_key"], keep="first").drop(columns=["_dedupe_key"])
-    if "published_at" in combined.columns:
-        combined["published_at"] = pd.to_datetime(combined["published_at"], errors="coerce")
-        combined = combined.sort_values("published_at", ascending=False, na_position="last")
-    return combined.head(max_items).reset_index(drop=True)
+
+    data = df.copy()
+    for col in ["ticker", "title", "short_title", "summary", "publisher", "published_at", "url", "source"]:
+        if col not in data.columns:
+            data[col] = ""
+
+    data["title_key"] = data["title"].astype(str).str.lower().str.replace(r"\\s+", " ", regex=True).str.strip()
+    data["url_key"] = data["url"].astype(str).str.lower().str.strip()
+    data["dedupe_key"] = data["url_key"].where(data["url_key"] != "", data["title_key"])
+    data["published_at"] = pd.to_datetime(data["published_at"], errors="coerce")
+    data = data.sort_values(["published_at", "source"], ascending=[False, True])
+    data = data.drop_duplicates(subset=["dedupe_key"], keep="first")
+    data = data.drop(columns=["title_key", "url_key", "dedupe_key"])
+    return data.head(max_items).reset_index(drop=True)
 
 
-def _source_counts(df: pd.DataFrame) -> dict[str, int]:
-    if df is None or df.empty or "source" not in df.columns:
-        return {}
-    return {str(k): int(v) for k, v in df["source"].fillna("unknown").value_counts().to_dict().items()}
+def _fetch_all_configured_sources(ticker: str, max_items: int = 30, days_back: int = 14) -> tuple[pd.DataFrame, list[str], list[str]]:
+    """Fetch yfinance plus any configured optional free developer sources."""
+    frames: list[pd.DataFrame] = []
+    sources_used: list[str] = []
+    notes: list[str] = []
 
+    yf_df = fetch_yfinance_news(ticker, max_items=max_items)
+    if not yf_df.empty:
+        frames.append(yf_df)
+        sources_used.append("yfinance")
+    else:
+        notes.append("yfinance returned no headlines.")
 
-def _finalize_news_result(
-    ticker: str,
-    source: str,
-    max_items: int,
-    days_back: int,
-    df: pd.DataFrame,
-    meta: dict[str, Any],
-    cache_key: str,
-    use_cache: bool,
-) -> tuple[pd.DataFrame, dict[str, Any]]:
-    if df is None:
-        df = pd.DataFrame()
-    if "published_at" in df.columns:
-        df["published_at"] = pd.to_datetime(df["published_at"], errors="coerce")
-    df = df.head(max_items).reset_index(drop=True)
-    meta["headline_count"] = int(len(df))
-    meta["source_counts"] = _source_counts(df)
-    meta["days_back"] = int(days_back)
-    meta.setdefault("cache_hit", False)
-    if use_cache and not df.empty:
-        _write_news_cache(cache_key, ticker, source, df, meta)
-    return df, meta
+    if _get_env_value("FINNHUB_API_KEY"):
+        finnhub_df = fetch_finnhub_news(ticker, max_items=max_items, days_back=days_back)
+        if not finnhub_df.empty:
+            frames.append(finnhub_df)
+            sources_used.append("finnhub")
+        else:
+            notes.append("Finnhub key found but returned no headlines for this ticker/window.")
+    else:
+        notes.append("FINNHUB_API_KEY not configured; skipped Finnhub.")
+
+    if _get_env_value("NEWSAPI_API_KEY"):
+        newsapi_df = fetch_newsapi_news(ticker, max_items=max_items, days_back=days_back)
+        if not newsapi_df.empty:
+            frames.append(newsapi_df)
+            sources_used.append("newsapi")
+        else:
+            notes.append("NewsAPI key found but returned no headlines for this ticker/window.")
+    else:
+        notes.append("NEWSAPI_API_KEY not configured; skipped NewsAPI.")
+
+    if not frames:
+        return pd.DataFrame(), sources_used, notes
+
+    combined = _deduplicate_news(pd.concat(frames, ignore_index=True), max_items=max_items)
+    return combined, sources_used, notes
 
 
 def fetch_news_for_ticker(
     ticker: str,
-    source: str = "all_configured",
+    source: str = "yfinance",
     max_items: int = 20,
     days_back: int = 14,
     use_cache: bool = True,
-    cache_ttl_minutes: int = 60,
+    force_refresh: bool = False,
+    cache_max_age_hours: float = 12.0,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
-    """Fetch news using local/no-key sources plus optional user-provided API keys.
-
-    No API key values are stored in the repo. Optional keys are read from `.env`.
-    `newsapi` is labeled development-only because NewsAPI's free plan is not intended
-    for hosted/staging/production usage.
-    """
-    source = source or "all_configured"
+    """Fetch news using a selected free-safe source strategy with local caching."""
+    source = source or "yfinance"
     ticker = ticker.strip().upper()
-    max_items = int(max_items)
-    days_back = int(days_back)
-    cache_key = _cache_signature(ticker, source, max_items, days_back)
-
     meta: dict[str, Any] = {
         "requested_source": source,
         "source_used": None,
+        "sources_used": [],
         "api_key_required": source in {"finnhub", "newsapi"},
-        "finnhub_key_found": bool(_get_env_value("FINNHUB_API_KEY")),
-        "newsapi_key_found": bool(_get_env_value("NEWSAPI_API_KEY")),
+        "api_key_found": False,
         "fallback_used": False,
-        "cache_hit": False,
+        "cache_used": False,
         "notes": [],
     }
 
-    cached = _read_news_cache(cache_key, cache_ttl_minutes) if use_cache else None
-    if cached is not None:
-        df, cached_meta = cached
-        cached_meta.setdefault("notes", [])
-        cached_meta["notes"].append("Loaded from local news cache.")
-        return df, cached_meta
+    if use_cache and not force_refresh:
+        cached = load_news_from_cache(ticker=ticker, max_age_hours=cache_max_age_hours, max_items=max_items)
+        if not cached.empty:
+            meta["source_used"] = "local_cache"
+            meta["sources_used"] = sorted(cached["source"].dropna().astype(str).unique().tolist())
+            meta["cache_used"] = True
+            meta["notes"].append(f"Used local news cache younger than {cache_max_age_hours:g} hours.")
+            return cached, meta
+
+    if source == "all_configured":
+        df, sources_used, notes = _fetch_all_configured_sources(ticker, max_items=max_items, days_back=days_back)
+        meta["source_used"] = "all_configured" if not df.empty else "none"
+        meta["sources_used"] = sources_used
+        meta["api_key_found"] = bool(_get_env_value("FINNHUB_API_KEY") or _get_env_value("NEWSAPI_API_KEY"))
+        meta["notes"].extend(notes)
+        if not df.empty:
+            save_news_to_cache(df)
+        return df, meta
 
     if source == "yfinance":
         df = fetch_yfinance_news(ticker, max_items=max_items)
         meta["source_used"] = "yfinance"
-        return _finalize_news_result(ticker, source, max_items, days_back, df, meta, cache_key, use_cache)
+        meta["sources_used"] = ["yfinance"] if not df.empty else []
+        if not df.empty:
+            save_news_to_cache(df)
+        return df, meta
 
     if source == "finnhub":
+        meta["api_key_found"] = bool(_get_env_value("FINNHUB_API_KEY"))
         df = fetch_finnhub_news(ticker, max_items=max_items, days_back=days_back)
         meta["source_used"] = "finnhub" if not df.empty else None
+        meta["sources_used"] = ["finnhub"] if not df.empty else []
         if df.empty:
             meta["notes"].append("Finnhub returned no rows or FINNHUB_API_KEY is missing; falling back to yfinance.")
-            df = fetch_yfinance_news(ticker, max_items=max_items)
+            fallback = fetch_yfinance_news(ticker, max_items=max_items)
             meta["source_used"] = "yfinance"
+            meta["sources_used"] = ["yfinance"] if not fallback.empty else []
             meta["fallback_used"] = True
-        return _finalize_news_result(ticker, source, max_items, days_back, df, meta, cache_key, use_cache)
+            if not fallback.empty:
+                save_news_to_cache(fallback)
+            return fallback, meta
+        save_news_to_cache(df)
+        return df, meta
 
     if source == "newsapi":
+        meta["api_key_found"] = bool(_get_env_value("NEWSAPI_API_KEY"))
         df = fetch_newsapi_news(ticker, max_items=max_items, days_back=days_back)
         meta["source_used"] = "newsapi" if not df.empty else None
-        meta["notes"].append("NewsAPI free Developer usage is intended for local development/testing only.")
+        meta["sources_used"] = ["newsapi"] if not df.empty else []
         if df.empty:
             meta["notes"].append("NewsAPI returned no rows or NEWSAPI_API_KEY is missing; falling back to yfinance.")
-            df = fetch_yfinance_news(ticker, max_items=max_items)
+            fallback = fetch_yfinance_news(ticker, max_items=max_items)
             meta["source_used"] = "yfinance"
+            meta["sources_used"] = ["yfinance"] if not fallback.empty else []
             meta["fallback_used"] = True
-        return _finalize_news_result(ticker, source, max_items, days_back, df, meta, cache_key, use_cache)
+            if not fallback.empty:
+                save_news_to_cache(fallback)
+            return fallback, meta
+        save_news_to_cache(df)
+        return df, meta
 
-    if source == "all_configured":
-        frames: list[pd.DataFrame] = []
-        yf_df = fetch_yfinance_news(ticker, max_items=max_items)
-        if not yf_df.empty:
-            frames.append(yf_df)
-        if meta["finnhub_key_found"]:
-            fh_df = fetch_finnhub_news(ticker, max_items=max_items, days_back=days_back)
-            if not fh_df.empty:
-                frames.append(fh_df)
-        if meta["newsapi_key_found"]:
-            na_df = fetch_newsapi_news(ticker, max_items=max_items, days_back=days_back)
-            if not na_df.empty:
-                frames.append(na_df)
-                meta["notes"].append("NewsAPI results are included for local development/testing only.")
-        df = _combine_news_frames(frames, max_items=max_items)
-        meta["source_used"] = "mixed" if len(_source_counts(df)) > 1 else (next(iter(_source_counts(df)), "none"))
-        if df.empty:
-            meta["notes"].append("No configured source returned headlines.")
-        return _finalize_news_result(ticker, source, max_items, days_back, df, meta, cache_key, use_cache)
-
-    # auto_free: no-key first, then optional configured APIs as fallback only.
+    # auto_free: try no-key first, then optional configured free APIs.
     yf_df = fetch_yfinance_news(ticker, max_items=max_items)
     if not yf_df.empty:
         meta["source_used"] = "yfinance"
-        return _finalize_news_result(ticker, source, max_items, days_back, yf_df, meta, cache_key, use_cache)
+        meta["sources_used"] = ["yfinance"]
+        save_news_to_cache(yf_df)
+        return yf_df, meta
 
     finnhub_df = fetch_finnhub_news(ticker, max_items=max_items, days_back=days_back)
     if not finnhub_df.empty:
         meta["source_used"] = "finnhub"
+        meta["sources_used"] = ["finnhub"]
+        meta["api_key_found"] = True
         meta["fallback_used"] = True
-        return _finalize_news_result(ticker, source, max_items, days_back, finnhub_df, meta, cache_key, use_cache)
+        save_news_to_cache(finnhub_df)
+        return finnhub_df, meta
 
     newsapi_df = fetch_newsapi_news(ticker, max_items=max_items, days_back=days_back)
     if not newsapi_df.empty:
         meta["source_used"] = "newsapi"
+        meta["sources_used"] = ["newsapi"]
+        meta["api_key_found"] = True
         meta["fallback_used"] = True
-        meta["notes"].append("NewsAPI fallback is intended for local development/testing only.")
-        return _finalize_news_result(ticker, source, max_items, days_back, newsapi_df, meta, cache_key, use_cache)
+        save_news_to_cache(newsapi_df)
+        return newsapi_df, meta
 
     meta["source_used"] = "none"
     meta["notes"].append("No news source returned headlines.")
-    return _finalize_news_result(ticker, source, max_items, days_back, pd.DataFrame(), meta, cache_key, use_cache)
+    return pd.DataFrame(), meta
 
 
 # -----------------------------------------------------------------------------
@@ -589,10 +495,10 @@ def _load_hf_pipeline(model_id: str):
     try:
         from transformers import pipeline
     except Exception as exc:
-        raise RuntimeError("transformers is not installed. Run: python -m pip install -r requirements-nlp.txt") from exc
+        raise RuntimeError("transformers is not installed. Run: python -m pip install -r requirements.txt") from exc
 
     try:
-        return pipeline("text-classification", model=model_id, tokenizer=model_id, top_k=None, device=-1)
+        return pipeline("text-classification", model=model_id, tokenizer=model_id, return_all_scores=True, device=-1)
     except Exception as exc:
         raise RuntimeError(f"Could not load Hugging Face model {model_id}: {exc}") from exc
 
@@ -842,7 +748,7 @@ def sentiment_engine_availability() -> pd.DataFrame:
                 "engine": engine,
                 "label": SENTIMENT_ENGINE_OPTIONS[engine],
                 "available": transformers_ok,
-                "notes": "Requires requirements-nlp.txt; downloads model on first use" if transformers_ok else "Install with: python -m pip install -r requirements-nlp.txt",
+                "notes": "Requires requirements.txt; downloads model on first use" if transformers_ok else "Install with: python -m pip install -r requirements.txt",
                 "model_id": model_id,
             }
         )

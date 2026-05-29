@@ -1,22 +1,26 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
-try:
-    from huggingface_hub import snapshot_download
-except Exception as exc:
-    raise SystemExit("Install NLP requirements first: python -m pip install -r requirements-nlp.txt") from exc
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(PROJECT_ROOT))
 
-from src.news_sentiment import HF_MODEL_IDS
+from src.news_sentiment import HF_MODEL_IDS  # noqa: E402
 
 
 def main() -> None:
-    print("Downloading/caching Hugging Face sentiment models...")
-    for name, repo_id in HF_MODEL_IDS.items():
-        print(f"- {name}: {repo_id}")
-        path = snapshot_download(repo_id=repo_id, repo_type="model")
-        print(f"  cached at: {Path(path)}")
-    print("Done. Meroq can now load these models from the local Hugging Face cache.")
+    try:
+        from transformers import pipeline
+    except Exception as exc:
+        raise SystemExit(
+            "transformers is not installed. Run: python -m pip install -r requirements.txt"
+        ) from exc
+
+    for key, model_id in HF_MODEL_IDS.items():
+        print(f"Downloading/loading {key}: {model_id}")
+        pipeline("text-classification", model=model_id, tokenizer=model_id, truncation=True)
+        print(f"✓ ready: {model_id}")
 
 
 if __name__ == "__main__":

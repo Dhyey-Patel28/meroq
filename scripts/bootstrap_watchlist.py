@@ -5,7 +5,6 @@ from pathlib import Path
 import sys
 import time
 
-# Allow running this file directly from the project root.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
@@ -23,7 +22,7 @@ def main() -> None:
         default=DEFAULT_WATCHLIST,
         help="Optional custom ticker list. Defaults to the 10-stock Meroq universe.",
     )
-    parser.add_argument("--sleep", type=float, default=0.5, help="Seconds to sleep between downloads.")
+    parser.add_argument("--sleep", type=float, default=0.75, help="Seconds to sleep between downloads.")
     args = parser.parse_args()
 
     print("Meroq watchlist bootstrap")
@@ -34,7 +33,9 @@ def main() -> None:
     for ticker in args.tickers:
         try:
             df = fetch_price_data(ticker=ticker, period=args.period, interval=args.interval, save_to_sqlite=True)
-            print(f"✓ {ticker}: saved {len(df):,} rows")
+            start = df["Date"].min().date() if not df.empty else "n/a"
+            end = df["Date"].max().date() if not df.empty else "n/a"
+            print(f"✓ {ticker}: saved {len(df):,} rows ({start} → {end})")
         except Exception as exc:
             print(f"✗ {ticker}: {exc}")
         time.sleep(args.sleep)
