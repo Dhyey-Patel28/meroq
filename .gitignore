@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+data/*.sqlite
+data/*.db
+models/
+.env
+.streamlit/secrets.toml
+
+!data/.gitkeep
