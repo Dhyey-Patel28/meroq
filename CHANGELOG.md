@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.1 — Senior QA polish and predictable analysis modes
+
+### Fixed
+
+- Analysis modes now enforce their preset model, comparison, and walk-forward settings unless Custom mode is selected.
+- Prevented stale Streamlit widget state from leaving Fast or Full mode with an old manually selected model such as Stacking Ensemble.
+- Collapsed Markdown report preview by default so the Report tab is less overwhelming.
+- Added a warning when the Hugging Face sentiment ensemble is combined with many headlines because that run can be slow on local CPU.
+- Kept generated SQLite databases and Python cache files out of the release package.
+
+### Changed
+
+- Simplified the initial waiting state with a recommended workflow for first-time users.
+- Moved manual model/backtest controls behind Custom mode to make the default experience more predictable.
+- Added `docs/QA_AUDIT.md` with user-impact findings, severity, and remediation notes.
+
 ## 1.2.0 — Portfolio risk and exposure view
 
 ### Added

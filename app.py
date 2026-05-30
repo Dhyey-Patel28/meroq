@@ -267,6 +267,11 @@ with st.sidebar:
             index=1,
             key="news_lookback_days_v82",
         )
+        if selected_sentiment_engine == "ensemble_finance" and int(max_news_items) > 20:
+            st.warning(
+                "Finance sentiment ensemble can be slow because it scores each headline with multiple local models. "
+                "Use 10–20 headlines while testing, or switch to Lightweight for fast runs."
+            )
         cache_news_locally = st.checkbox(
             "Cache news locally",
             value=True,
@@ -307,83 +312,131 @@ with st.sidebar:
 
     with st.expander("Model settings", expanded=False):
         model_label_to_name = {label: name for name, label in MODEL_LABELS.items()}
-        selected_model_label = st.selectbox(
-            "Primary model",
-            options=list(model_label_to_name.keys()),
-            index=list(model_label_to_name.keys()).index(mode_settings["primary_model"]),
-            key="primary_model_v82",
-        )
-        selected_model_name = model_label_to_name[selected_model_label]
 
-        comparison_set = st.selectbox(
-            "Model comparison set",
-            options=["Core fast", "Advanced all"],
-            index=["Core fast", "Advanced all"].index(mode_settings["comparison_set"]),
-            key="comparison_set_v82",
-        )
+        if analysis_mode == "Custom":
+            selected_model_label = st.selectbox(
+                "Primary model",
+                options=list(model_label_to_name.keys()),
+                index=list(model_label_to_name.keys()).index(mode_settings["primary_model"]),
+                key="primary_model_custom_v121",
+            )
+            selected_model_name = model_label_to_name[selected_model_label]
+
+            comparison_set = st.selectbox(
+                "Model comparison set",
+                options=["Core fast", "Advanced all"],
+                index=["Core fast", "Advanced all"].index(mode_settings["comparison_set"]),
+                key="comparison_set_custom_v121",
+            )
+        else:
+            selected_model_label = mode_settings["primary_model"]
+            selected_model_name = model_label_to_name[selected_model_label]
+            comparison_set = mode_settings["comparison_set"]
+            st.info(
+                f"{analysis_mode} uses **{selected_model_label}** with the **{comparison_set}** comparison set. "
+                "Switch to Custom if you want manual model controls."
+            )
+            st.dataframe(
+                pd.DataFrame([
+                    {"setting": "Primary model", "value": selected_model_label},
+                    {"setting": "Model comparison set", "value": comparison_set},
+                ]),
+                width="stretch",
+                hide_index=True,
+            )
+
         comparison_model_names = CORE_MODEL_NAMES if comparison_set == "Core fast" else ADVANCED_MODEL_NAMES
 
         if selected_model_name in ENSEMBLE_MODEL_NAMES:
             st.warning("Ensemble models are slower. Use XGBoost while iterating.")
 
     with st.expander("Walk-forward backtest", expanded=False):
-        run_primary_wf = st.checkbox(
-            "Run primary walk-forward backtest",
-            value=mode_settings["run_primary_wf"],
-            key="run_primary_wf_v82",
-        )
         defaults = WALK_FORWARD_DEFAULTS.get(interval, WALK_FORWARD_DEFAULTS["1d"])
 
-        probability_threshold = st.slider(
-            "Trading probability threshold",
-            min_value=0.50,
-            max_value=0.75,
-            value=0.55,
-            step=0.01,
-        )
-        transaction_cost_bps = st.number_input(
-            "Transaction cost, bps",
-            min_value=0,
-            max_value=100,
-            value=10,
-            step=1,
-        )
-        run_wf_model_comparison = st.checkbox(
-            "Run walk-forward comparison for all models",
-            value=mode_settings["run_wf_model_comparison"],
-            key="run_wf_model_comparison_v82",
-        )
-
-        st.caption("Advanced backtest settings")
-        initial_train_size = st.number_input(
-            "Initial train rows",
-            min_value=60,
-            max_value=3000,
-            value=defaults["initial_train_size"],
-            step=10,
-        )
-        wf_test_size = st.number_input(
-            "Test rows per fold",
-            min_value=1,
-            max_value=252,
-            value=defaults["test_size"],
-            step=1,
-        )
-        wf_step_size = st.number_input(
-            "Step rows",
-            min_value=1,
-            max_value=252,
-            value=defaults["step_size"],
-            step=1,
-        )
-        max_folds = st.number_input(
-            "Max recent folds",
-            min_value=1,
-            max_value=100,
-            value=mode_settings["max_folds"],
-            step=1,
-            key="max_recent_folds_v82",
-        )
+        if analysis_mode == "Custom":
+            run_primary_wf = st.checkbox(
+                "Run primary walk-forward backtest",
+                value=mode_settings["run_primary_wf"],
+                key="run_primary_wf_custom_v121",
+            )
+            run_wf_model_comparison = st.checkbox(
+                "Run walk-forward comparison for all models",
+                value=mode_settings["run_wf_model_comparison"],
+                key="run_wf_model_comparison_custom_v121",
+            )
+            probability_threshold = st.slider(
+                "Trading probability threshold",
+                min_value=0.50,
+                max_value=0.75,
+                value=0.55,
+                step=0.01,
+                key="probability_threshold_custom_v121",
+            )
+            transaction_cost_bps = st.number_input(
+                "Transaction cost, bps",
+                min_value=0,
+                max_value=100,
+                value=10,
+                step=1,
+                key="transaction_cost_bps_custom_v121",
+            )
+            st.caption("Advanced backtest settings")
+            initial_train_size = st.number_input(
+                "Initial train rows",
+                min_value=60,
+                max_value=3000,
+                value=defaults["initial_train_size"],
+                step=10,
+                key="initial_train_rows_custom_v121",
+            )
+            wf_test_size = st.number_input(
+                "Test rows per fold",
+                min_value=1,
+                max_value=252,
+                value=defaults["test_size"],
+                step=1,
+                key="wf_test_rows_custom_v121",
+            )
+            wf_step_size = st.number_input(
+                "Step rows",
+                min_value=1,
+                max_value=252,
+                value=defaults["step_size"],
+                step=1,
+                key="wf_step_rows_custom_v121",
+            )
+            max_folds = st.number_input(
+                "Max recent folds",
+                min_value=1,
+                max_value=100,
+                value=mode_settings["max_folds"],
+                step=1,
+                key="max_recent_folds_custom_v121",
+            )
+        else:
+            run_primary_wf = bool(mode_settings["run_primary_wf"])
+            run_wf_model_comparison = bool(mode_settings["run_wf_model_comparison"])
+            probability_threshold = 0.55
+            transaction_cost_bps = 10
+            initial_train_size = defaults["initial_train_size"]
+            wf_test_size = defaults["test_size"]
+            wf_step_size = defaults["step_size"]
+            max_folds = mode_settings["max_folds"]
+            st.info(
+                f"{analysis_mode} controls backtesting automatically. "
+                "Switch to Custom for manual walk-forward settings."
+            )
+            st.dataframe(
+                pd.DataFrame([
+                    {"setting": "Primary walk-forward", "value": "On" if run_primary_wf else "Off"},
+                    {"setting": "All-model walk-forward", "value": "On" if run_wf_model_comparison else "Off"},
+                    {"setting": "Max recent folds", "value": max_folds},
+                    {"setting": "Probability threshold", "value": probability_threshold},
+                    {"setting": "Transaction cost, bps", "value": transaction_cost_bps},
+                ]),
+                width="stretch",
+                hide_index=True,
+            )
 
     with st.expander("Universe and disclaimer", expanded=False):
         st.caption("Educational/research use only — not financial advice.")
@@ -476,8 +529,11 @@ stage_updated = {stage: "" for stage in RUN_STAGES}
 def render_waiting_state() -> None:
     """Render the clean initial page before a run starts."""
     with summary_placeholder.container():
-        st.info("Enter a ticker, choose settings, and click **Run prediction**.")
-        st.write("Results will populate here as each section becomes available.")
+        st.info("Enter a ticker, keep **Fast mode** for the first run, and click **Run prediction**.")
+        st.write(
+            "Recommended workflow: start with Prediction, then review News Sentiment and Risk Simulation. "
+            "Enable Watchlist or Portfolio only when you want a broader scan."
+        )
 
     with prediction_placeholder.container():
         st.info("Prediction has not started yet.")
@@ -1372,7 +1428,7 @@ def render_report_section(
         with col_b:
             st.caption("The report includes the latest signal, sentiment overlay, risk simulation, watchlist highlights, and model comparison summary.")
 
-        with st.expander("Preview report", expanded=True):
+        with st.expander("Preview report", expanded=False):
             st.markdown(report_markdown)
 
         if watchlist_df is not None and not watchlist_df.empty:

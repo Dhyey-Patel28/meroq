@@ -6,16 +6,16 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**1.2.0 — Portfolio risk and exposure view**
+**1.2.1 — Senior QA polish and predictable analysis modes**
 
-This release adds a portfolio-level risk view on top of the existing watchlist scan:
+This release stabilizes the product experience after the portfolio release:
 
-- Adds a Portfolio results tab
-- Converts watchlist scan rows into equal-weight or custom-weight portfolio exposure
-- Computes weighted signal probability, weighted sentiment, Meroq Score, downside-risk exposure, and high-risk allocation
-- Adds portfolio weight and downside-contribution charts
-- Adds a command-line portfolio analyzer and portfolio-risk documentation
-- Keeps the Streamlit UI focused while preserving the FastAPI/Next.js migration plan in docs
+- Makes analysis modes deterministic so Fast/Research/Full presets cannot be overridden by stale Streamlit widget state
+- Keeps manual model and walk-forward controls behind Custom mode
+- Reduces sidebar confusion for first-time users
+- Collapses report previews by default so downloads and report generation do not dominate the page
+- Adds a QA audit document with user-facing issues, severity, and fixes
+- Keeps generated SQLite/cache files out of the distributable project package
 
 ## Core capabilities
 
@@ -72,6 +72,7 @@ Read:
 - `docs/DEPLOYMENT.md` for local/public-demo guidance and secrets handling
 - `docs/FRONTEND_MIGRATION.md` for the Streamlit-to-FastAPI/Next.js migration plan
 - `docs/PORTFOLIO_RISK.md` for the portfolio exposure view
+- `docs/QA_AUDIT.md` for senior QA findings and fixes
 
 ## Optional API keys
 
