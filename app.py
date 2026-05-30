@@ -53,6 +53,7 @@ from src.sentiment_modeling import (
     compare_base_vs_sentiment_simple_split,
 )
 from src.watchlist import scan_watchlist, summarize_watchlist_scan
+from src.portfolio import build_portfolio_view, parse_portfolio_weights, portfolio_summary_sentence
 from src.reporting import build_insight_report
 
 
@@ -167,6 +168,28 @@ with st.sidebar:
             key="watchlist_include_risk_v90",
         )
         st.caption("Uses XGBoost with lighter settings by default so the scan stays practical.")
+
+    with st.expander("Portfolio view", expanded=False):
+        run_portfolio_view = st.checkbox(
+            "Run portfolio risk view",
+            value=False,
+            key="run_portfolio_view_v120",
+            help="Builds an equal-weight or custom-weight view from the watchlist scan.",
+        )
+        portfolio_weighting_mode = st.selectbox(
+            "Weighting method",
+            options=["Equal weight", "Custom weights"],
+            index=0,
+            key="portfolio_weighting_mode_v120",
+        )
+        portfolio_weights_text = st.text_area(
+            "Custom weights",
+            value="",
+            height=70,
+            key="portfolio_weights_text_v120",
+            help="Optional format: AAPL:40, MSFT:25, SPY:35. Missing tickers receive equal residual weight.",
+        )
+        st.caption("Portfolio view uses the same scanned universe as the Watchlist tab and does not place trades.")
 
     with st.expander("Risk simulation", expanded=False):
         run_risk_simulation = st.checkbox(
@@ -375,10 +398,11 @@ results_root_tab, run_details_root_tab = st.tabs(["Results", "Run Details"])
 
 with results_root_tab:
     summary_placeholder = st.empty()
-    tab_prediction, tab_watchlist, tab_report, tab_chart, tab_risk, tab_sentiment, tab_sentiment_modeling, tab_walk_forward, tab_comparison, tab_model, tab_data = st.tabs(
+    tab_prediction, tab_watchlist, tab_portfolio, tab_report, tab_chart, tab_risk, tab_sentiment, tab_sentiment_modeling, tab_walk_forward, tab_comparison, tab_model, tab_data = st.tabs(
         [
             "Prediction",
             "Watchlist",
+            "Portfolio",
             "Report",
             "Chart",
             "Risk Simulation",
@@ -395,6 +419,8 @@ with results_root_tab:
         prediction_placeholder = st.empty()
     with tab_watchlist:
         watchlist_placeholder = st.empty()
+    with tab_portfolio:
+        portfolio_placeholder = st.empty()
     with tab_report:
         report_placeholder = st.empty()
     with tab_chart:
@@ -433,6 +459,7 @@ RUN_STAGES = [
     "Sentiment-aware signal",
     "Sentiment modeling",
     "Watchlist scan",
+    "Portfolio view",
     "Model comparison",
     "Primary walk-forward",
     "Walk-forward comparison",
@@ -456,6 +483,8 @@ def render_waiting_state() -> None:
         st.info("Prediction has not started yet.")
     with watchlist_placeholder.container():
         st.info("Watchlist scan will appear here if enabled in the sidebar.")
+    with portfolio_placeholder.container():
+        st.info("Portfolio risk view will appear here if enabled in the sidebar.")
     with report_placeholder.container():
         st.info("Run a prediction to generate a downloadable Meroq insight report.")
     with chart_placeholder.container():
@@ -1200,6 +1229,92 @@ def render_watchlist_section(watchlist_df: pd.DataFrame | None, scan_summary: di
                 st.dataframe(failed_df, width="stretch", hide_index=True)
 
 
+
+def render_portfolio_section(portfolio_df: pd.DataFrame | None, portfolio_summary: dict | None = None) -> None:
+    """Render portfolio-level risk and exposure view."""
+    with portfolio_placeholder.container():
+        st.subheader("Portfolio risk and exposure")
+        st.write(
+            "Turn a watchlist scan into a portfolio-level view. Meroq combines weights, model probability, "
+            "recent sentiment, and simulated downside risk to summarize exposure."
+        )
+
+        if portfolio_df is None or portfolio_df.empty or not portfolio_summary:
+            st.info("Portfolio view was skipped. Enable **Run portfolio risk view** in the sidebar.")
+            return
+
+        st.info(portfolio_summary_sentence(portfolio_summary))
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Positions", portfolio_summary.get("positions", 0))
+        c2.metric("Portfolio score", f"{portfolio_summary.get('portfolio_meroq_score', 0.0):.1f}/100")
+        c3.metric("Weighted up probability", f"{portfolio_summary.get('weighted_up_probability', 0.0):.1%}")
+        c4.metric("Portfolio risk", portfolio_summary.get("portfolio_risk_label", "Unavailable"))
+
+        c5, c6, c7, c8 = st.columns(4)
+        c5.metric("Weighted daily return", f"{portfolio_summary.get('weighted_daily_return', 0.0):.2%}")
+        c6.metric("Downside >5% exposure", f"{portfolio_summary.get('weighted_downside_probability', 0.0):.1%}")
+        c7.metric("Positive sentiment weight", f"{portfolio_summary.get('positive_sentiment_weight', 0.0):.1%}")
+        c8.metric("High-risk weight", f"{portfolio_summary.get('high_risk_weight', 0.0):.1%}")
+
+        display_cols = [
+            "ticker",
+            "weight",
+            "latest_close",
+            "return_1d",
+            "final_signal",
+            "final_up_probability",
+            "sentiment_label",
+            "risk_label",
+            "risk_loss_gt_5pct",
+            "meroq_score",
+            "weighted_meroq_score",
+        ]
+        display_cols = [col for col in display_cols if col in portfolio_df.columns]
+        st.markdown("### Holdings view")
+        st.dataframe(portfolio_df[display_cols], width="stretch", hide_index=True)
+
+        left, right = st.columns(2)
+        with left:
+            st.plotly_chart(
+                px.pie(
+                    portfolio_df,
+                    names="ticker",
+                    values="weight",
+                    title="Portfolio weights",
+                ),
+                width="stretch",
+                key="portfolio_weight_pie_v120",
+            )
+        with right:
+            risk_cols = ["ticker", "weight", "risk_loss_gt_5pct"]
+            if all(col in portfolio_df.columns for col in risk_cols):
+                risk_plot_df = portfolio_df.copy()
+                risk_plot_df["weighted_downside"] = risk_plot_df["weight"] * risk_plot_df["risk_loss_gt_5pct"]
+                st.plotly_chart(
+                    px.bar(
+                        risk_plot_df.sort_values("weighted_downside"),
+                        x="weighted_downside",
+                        y="ticker",
+                        orientation="h",
+                        title="Weighted downside contribution",
+                        labels={"weighted_downside": "Weight × P(loss > 5%)"},
+                    ),
+                    width="stretch",
+                    key="portfolio_downside_contribution_v120",
+                )
+            else:
+                st.info("Run lightweight risk simulation to see downside contribution by holding.")
+
+        st.markdown("### Portfolio interpretation")
+        st.write(f"**Signal profile:** {portfolio_summary.get('portfolio_signal_label', 'Unavailable')}")
+        st.write(f"**Risk profile:** {portfolio_summary.get('portfolio_risk_label', 'Unavailable')}")
+        st.caption(
+            "This is a diagnostic view. It does not account for position-level tax impact, options exposure, "
+            "intraday liquidity, or full covariance-based portfolio optimization."
+        )
+
+
 def render_report_section(
     ticker: str,
     latest_close: float,
@@ -1212,6 +1327,8 @@ def render_report_section(
     sentiment_summary: dict | None,
     risk_results: dict | None,
     watchlist_df: pd.DataFrame | None,
+    portfolio_df: pd.DataFrame | None,
+    portfolio_summary: dict | None,
     simple_comparison: pd.DataFrame | None,
     wf_results: dict | None,
 ) -> None:
@@ -1235,6 +1352,8 @@ def render_report_section(
             sentiment_summary=sentiment_summary,
             risk_summary=risk_results.get("summary") if risk_results else None,
             watchlist_df=watchlist_df,
+            portfolio_df=portfolio_df,
+            portfolio_summary=portfolio_summary,
             model_comparison_df=simple_comparison,
             walk_forward_results=wf_results,
         )
@@ -1248,6 +1367,7 @@ def render_report_section(
                 mime="text/markdown",
                 key=f"download_report_{ticker}_{selected_model_label}",
                 width="stretch",
+                on_click="ignore",
             )
         with col_b:
             st.caption("The report includes the latest signal, sentiment overlay, risk simulation, watchlist highlights, and model comparison summary.")
@@ -1264,8 +1384,20 @@ def render_report_section(
                 mime="text/csv",
                 key=f"download_watchlist_csv_{ticker}_{selected_model_label}",
                 width="stretch",
+                on_click="ignore",
             )
 
+        if portfolio_df is not None and not portfolio_df.empty:
+            portfolio_csv = portfolio_df.to_csv(index=False)
+            st.download_button(
+                "Download portfolio exposure CSV",
+                data=portfolio_csv,
+                file_name="meroq_portfolio_exposure.csv",
+                mime="text/csv",
+                key=f"download_portfolio_csv_{ticker}_{selected_model_label}",
+                width="stretch",
+                on_click="ignore",
+            )
 
 
 def simple_comparison_progress(payload: dict) -> None:
@@ -1368,6 +1500,8 @@ with prediction_placeholder.container():
     st.info("Waiting for latest prediction...")
 with watchlist_placeholder.container():
     st.info("Waiting for watchlist scan settings...")
+with portfolio_placeholder.container():
+    st.info("Waiting for portfolio view settings...")
 with report_placeholder.container():
     st.info("Report will be generated after the main analysis finishes.")
 with chart_placeholder.container():
@@ -1610,7 +1744,9 @@ try:
 
     watchlist_df = pd.DataFrame()
     watchlist_summary = {}
-    if run_watchlist_scan:
+    portfolio_df = pd.DataFrame()
+    portfolio_summary = {}
+    if run_watchlist_scan or run_portfolio_view:
         parsed_watchlist = [x.strip().upper() for x in watchlist_text.replace("\n", ",").split(",") if x.strip()]
         parsed_watchlist = list(dict.fromkeys(parsed_watchlist))[: int(watchlist_max_tickers)]
         update_run_monitor(
@@ -1653,6 +1789,30 @@ try:
         update_run_monitor("Watchlist scan", "skipped", "Skipped in sidebar", 65)
 
     render_watchlist_section(watchlist_df, watchlist_summary)
+
+    if run_portfolio_view:
+        if watchlist_df is None or watchlist_df.empty:
+            update_run_monitor("Portfolio view", "skipped", "No watchlist scan available", 66)
+        else:
+            update_run_monitor("Portfolio view", "running", "Building weighted portfolio view", 66)
+            parsed_watchlist_for_portfolio = [x.strip().upper() for x in watchlist_text.replace("\n", ",").split(",") if x.strip()]
+            parsed_watchlist_for_portfolio = list(dict.fromkeys(parsed_watchlist_for_portfolio))[: int(watchlist_max_tickers)]
+            weights_input = portfolio_weights_text if portfolio_weighting_mode == "Custom weights" else ""
+            weights_df = parse_portfolio_weights(parsed_watchlist_for_portfolio, weights_input)
+            portfolio_df, portfolio_summary = build_portfolio_view(watchlist_df, weights_df)
+            if portfolio_df.empty:
+                update_run_monitor("Portfolio view", "skipped", "No successful holdings to summarize", 67)
+            else:
+                update_run_monitor(
+                    "Portfolio view",
+                    "complete",
+                    f"{portfolio_summary.get('positions', 0)} positions, score {portfolio_summary.get('portfolio_meroq_score', 0.0):.1f}",
+                    67,
+                    portfolio_summary_sentence(portfolio_summary),
+                )
+    else:
+        update_run_monitor("Portfolio view", "skipped", "Skipped in sidebar", 67)
+    render_portfolio_section(portfolio_df, portfolio_summary)
 
     update_run_monitor(
         "Model comparison",
@@ -1783,6 +1943,8 @@ try:
         sentiment_summary=sentiment_summary,
         risk_results=risk_results,
         watchlist_df=watchlist_df,
+        portfolio_df=portfolio_df,
+        portfolio_summary=portfolio_summary,
         simple_comparison=simple_comparison,
         wf_results=wf_results,
     )
@@ -1792,7 +1954,7 @@ try:
         "complete",
         "All result sections are ready",
         100,
-        "Dashboard is ready: Prediction, Watchlist, Report, Chart, Risk Simulation, News Sentiment, Sentiment Modeling, Backtest, Model Comparison, Model Details, and Data Manager sections are loaded.",
+        "Dashboard is ready: Prediction, Watchlist, Portfolio, Report, Chart, Risk Simulation, News Sentiment, Sentiment Modeling, Backtest, Model Comparison, Model Details, and Data Manager sections are loaded.",
     )
 
 except Exception as exc:

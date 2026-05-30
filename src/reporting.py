@@ -58,6 +58,8 @@ def build_insight_report(
     sentiment_summary: dict | None = None,
     risk_summary: dict | None = None,
     watchlist_df: pd.DataFrame | None = None,
+    portfolio_df: pd.DataFrame | None = None,
+    portfolio_summary: dict | None = None,
     model_comparison_df: pd.DataFrame | None = None,
     walk_forward_results: dict | None = None,
 ) -> str:
@@ -175,6 +177,34 @@ Meroq's selected model is **{_safe(selected_model_label)}**. The model produced 
         "final_signal",
         "final_up_probability",
         "risk_label",
+        "meroq_score",
+    ],
+    n=10,
+)}
+
+## Portfolio View
+
+| Item | Value |
+|---|---:|
+| Positions | {_safe((portfolio_summary or {}).get("positions"))} |
+| Portfolio Meroq Score | {_num((portfolio_summary or {}).get("portfolio_meroq_score"), 1)} / 100 |
+| Weighted up probability | {_pct((portfolio_summary or {}).get("weighted_up_probability"))} |
+| Weighted downside >5% probability | {_pct((portfolio_summary or {}).get("weighted_downside_probability"))} |
+| Positive sentiment weight | {_pct((portfolio_summary or {}).get("positive_sentiment_weight"))} |
+| High-risk weight | {_pct((portfolio_summary or {}).get("high_risk_weight"))} |
+| Portfolio signal profile | {_safe((portfolio_summary or {}).get("portfolio_signal_label"))} |
+| Portfolio risk profile | {_safe((portfolio_summary or {}).get("portfolio_risk_label"))} |
+
+{_top_rows_as_markdown(
+    portfolio_df,
+    [
+        "ticker",
+        "weight",
+        "final_signal",
+        "final_up_probability",
+        "sentiment_label",
+        "risk_label",
+        "risk_loss_gt_5pct",
         "meroq_score",
     ],
     n=10,

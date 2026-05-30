@@ -6,15 +6,16 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**1.1.0 — Deployment readiness and cleaner product UI**
+**1.2.0 — Portfolio risk and exposure view**
 
-This release prepares Meroq for a public-facing repository and future hosted demo:
+This release adds a portfolio-level risk view on top of the existing watchlist scan:
 
-- Removes the internal Production Roadmap tab from the main results interface
-- Keeps roadmap and deployment guidance in documentation instead of product tabs
-- Adds deployment guidance for local use, Streamlit-style hosting, and secret handling
-- Adds a frontend migration plan for a future React/Next.js interface
-- Keeps the current Streamlit app as the fastest research and prototyping surface
+- Adds a Portfolio results tab
+- Converts watchlist scan rows into equal-weight or custom-weight portfolio exposure
+- Computes weighted signal probability, weighted sentiment, Meroq Score, downside-risk exposure, and high-risk allocation
+- Adds portfolio weight and downside-contribution charts
+- Adds a command-line portfolio analyzer and portfolio-risk documentation
+- Keeps the Streamlit UI focused while preserving the FastAPI/Next.js migration plan in docs
 
 ## Core capabilities
 
@@ -36,6 +37,7 @@ This release prepares Meroq for a public-facing repository and future hosted dem
 - Simulate strategy behavior with transaction costs
 - Run Monte Carlo price-risk simulation
 - Scan a watchlist and rank symbols with a transparent Meroq Score
+- Analyze a scanned watchlist as a weighted portfolio with exposure and downside-risk summaries
 - Resolve tickers to company names before broad news search
 - Fetch and relevance-filter recent company headlines
 - Score headlines with lightweight or local Hugging Face financial sentiment models
@@ -69,6 +71,7 @@ Read:
 
 - `docs/DEPLOYMENT.md` for local/public-demo guidance and secrets handling
 - `docs/FRONTEND_MIGRATION.md` for the Streamlit-to-FastAPI/Next.js migration plan
+- `docs/PORTFOLIO_RISK.md` for the portfolio exposure view
 
 ## Optional API keys
 

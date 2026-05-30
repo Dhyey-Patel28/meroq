@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.0 — Portfolio risk and exposure view
+
+### Added
+
+- Added a Portfolio results tab that turns a watchlist scan into weighted exposure.
+- Added equal-weight and custom-weight portfolio controls.
+- Added portfolio-level metrics: weighted up probability, Meroq Score, downside exposure, positive-sentiment exposure, high-risk weight, and weighted daily return.
+- Added portfolio weight and weighted downside contribution charts.
+- Added `src/portfolio.py` and `scripts/analyze_portfolio.py`.
+- Added `docs/PORTFOLIO_RISK.md` and `notebooks/08_portfolio_risk_research.ipynb`.
+
+### Fixed
+
+- Kept report and CSV download buttons from rerunning the app by using Streamlit's ignored download click behavior.
+
 ## 1.1.0 — Deployment readiness and cleaner product UI
 
 ### Changed
