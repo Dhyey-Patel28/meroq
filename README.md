@@ -6,18 +6,16 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**1.0.0 — Watchlist intelligence dashboard**
+**1.0.1 — Company-aware news matching**
 
-This release adds a multi-ticker watchlist intelligence layer:
+This release improves news quality for sentiment analysis:
 
-- Configurable watchlist scan for a small universe of tickers
-- Fast XGBoost-based scan per ticker
-- Recent-news sentiment summary per symbol
-- Lightweight Monte Carlo risk metrics per symbol
-- Meroq Score: a transparent 0–100 ranking score using model probability, sentiment, trend, and downside risk
-- Watchlist tab with ranked table, score chart, risk/probability scatter chart, and quick-read summary
-- Command-line watchlist scan script
-- Existing sentiment modeling, risk simulation, model comparison, and local data-layer tools remain available
+- Resolves tickers into actual company names before news search
+- Uses company-name-first NewsAPI queries instead of broad raw ticker searches
+- Adds company alias matching for names such as Dave & Buster's / Dave Busters
+- Filters broad news results by company relevance before sentiment scoring
+- Applies the same relevance filter to local cached headlines
+- Keeps the watchlist intelligence dashboard, report exports, sentiment modeling, risk simulation, and local data-layer tools available
 
 ## Core capabilities
 
@@ -39,7 +37,8 @@ This release adds a multi-ticker watchlist intelligence layer:
 - Simulate strategy behavior with transaction costs
 - Run Monte Carlo price-risk simulation
 - Scan a watchlist and rank symbols with a transparent Meroq Score
-- Fetch recent company headlines
+- Resolve tickers to company names before broad news search
+- Fetch and relevance-filter recent company headlines
 - Score headlines with lightweight or local Hugging Face financial sentiment models
 - Combine model probability with recent-news sentiment as a transparent signal overlay
 - Aggregate headline sentiment into daily feature rows

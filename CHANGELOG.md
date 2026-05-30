@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.1 — Company-aware news matching
+
+### Fixed
+
+- Replaced raw-ticker NewsAPI search with company-name-first search.
+- Added ticker-to-company resolution through yfinance profile metadata.
+- Added company alias generation for names such as Dave & Buster's / Dave Busters.
+- Added relevance filtering so broad NewsAPI results like sports, entertainment, or generic uses of ambiguous tickers are removed before sentiment scoring.
+- Filtered local cached headlines through the same relevance layer before reuse.
+- Added News Sentiment UI details showing resolved company name, aliases, and the NewsAPI query used.
+
 ## 1.0.0 - Exportable insight reports
 
 ### Added

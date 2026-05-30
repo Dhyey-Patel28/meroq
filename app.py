@@ -720,16 +720,20 @@ def render_sentiment_section(
     news_meta = news_meta or {}
     with sentiment_placeholder.container():
         st.subheader("News sentiment")
+        company_name = str(news_meta.get("company_name") or ticker.upper())
+        aliases = news_meta.get("company_aliases") or []
         if sentiment_summary is not None and sentiment_summary.get("available"):
             headline_count = int(sentiment_summary.get("headline_count", 0) or 0)
             overall_label = sentiment_summary.get("overall_label", "Unknown")
             avg_score = float(sentiment_summary.get("average_score", 0.0) or 0.0)
             confidence = float(sentiment_summary.get("confidence", 0.0) or 0.0)
             st.write(
-                f"Meroq scored **{headline_count} recent headlines** for **{ticker.upper()}**. "
-                f"Current news tone is **{overall_label}** with an average sentiment score of "
-                f"**{avg_score:+.2f}** and confidence of **{confidence:.1%}**."
+                f"Meroq scored **{headline_count} company-relevant headlines** for "
+                f"**{company_name} ({ticker.upper()})**. Current news tone is **{overall_label}** "
+                f"with an average sentiment score of **{avg_score:+.2f}** and confidence of **{confidence:.1%}**."
             )
+            if aliases:
+                st.caption("Company matching used: " + ", ".join(str(a) for a in aliases[:5]))
         else:
             st.write(
                 "Recent-news sentiment will appear here after headlines are fetched and scored. "
@@ -747,6 +751,12 @@ def render_sentiment_section(
         if news_meta.get("notes"):
             source_note += " " + " ".join(str(x) for x in news_meta.get("notes", []))
         st.caption(source_note)
+        if news_meta.get("newsapi_query"):
+            with st.expander("News matching details", expanded=False):
+                st.write(f"Company resolved as: **{company_name}**")
+                st.write("NewsAPI query used:")
+                st.code(str(news_meta.get("newsapi_query")), language="text")
+                st.write(str(news_meta.get("relevance_filter", "Company relevance filter enabled.")))
         st.caption(f"Sentiment engine selected: {selected_sentiment_engine_label}")
 
         if sentiment_summary is None or not sentiment_summary.get("available"):
@@ -1267,7 +1277,7 @@ def render_roadmap_section() -> None:
         st.subheader("Production-minded upgrade path")
         st.markdown(
             """
-            **Current release: 1.0.0 — Watchlist intelligence and exportable insight reports.**
+            **Current release: 1.0.1 — Company-aware news matching and exportable insight reports.**
 
             This release adds a multi-ticker intelligence layer and a downloadable report workflow:
 

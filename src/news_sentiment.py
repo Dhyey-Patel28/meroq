@@ -128,6 +128,263 @@ def _shorten_title(title: str, max_len: int = 90) -> str:
     return title[: max_len - 3].rstrip() + "..."
 
 
+
+
+# -----------------------------------------------------------------------------
+# Company identity + relevance helpers
+# -----------------------------------------------------------------------------
+
+COMPANY_SUFFIX_PATTERN = re.compile(
+    r"\b(incorporated|inc\.?|corp\.?|corporation|co\.?|company|ltd\.?|limited|plc|holdings?|group|class\s+[a-z]|common\s+stock|ordinary\s+shares)\b",
+    flags=re.IGNORECASE,
+)
+
+# Tickers that are common English words or too ambiguous for broad news search.
+# For these, Meroq avoids using the raw ticker as the primary NewsAPI query.
+AMBIGUOUS_TICKERS = {
+    "A", "AA", "AI", "ALL", "ARE", "ARM", "BE", "BIG", "BOX", "BY", "CAN", "CAR", "CAT", "CASH",
+    "COIN", "COOL", "COST", "DASH", "DD", "DNA", "DOC", "EYE", "F", "FAST", "FIVE", "FOR", "GO",
+    "GOOD", "HAS", "HE", "HIM", "HOOD", "JOB", "KEY", "LIFE", "LOVE", "MAN", "NOW", "ON", "OPEN",
+    "PLAY", "REAL", "RUN", "SAVE", "SNAP", "SO", "T", "TEAM", "TOY", "TRUE", "U", "UP", "VIEW", "W", "YOU",
+}
+
+FINANCE_CONTEXT_TERMS = {
+    "stock", "stocks", "share", "shares", "market", "markets", "investor", "investors", "analyst", "analysts",
+    "earnings", "revenue", "profit", "profits", "sales", "guidance", "price target", "rating", "upgrade",
+    "downgrade", "nasdaq", "nyse", "quarter", "fiscal", "dividend", "buyback", "sec", "filing",
+}
+
+# Small manual fallback map for ambiguous tickers when yfinance profile lookup fails.
+# This is not intended to replace live metadata; it only protects common-word tickers.
+COMPANY_NAME_OVERRIDES = {
+    "PLAY": "Dave & Buster's Entertainment, Inc.",
+}
+
+
+def _clean_company_name(value: str) -> str:
+    """Normalize a company name for query generation and matching."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    text = text.replace("&", " and ")
+    text = text.replace("’", "'")
+    text = re.sub(r"\([^)]*\)", " ", text)
+    text = COMPANY_SUFFIX_PATTERN.sub(" ", text)
+    text = re.sub(r"[^A-Za-z0-9' ]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _compact_company_phrase(value: str) -> str:
+    """Return a lower-case alphanumeric phrase used for fuzzy containment."""
+    cleaned = _clean_company_name(value).lower()
+    cleaned = re.sub(r"[^a-z0-9]+", " ", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _company_aliases_from_names(ticker: str, *names: str) -> list[str]:
+    """Build company aliases from yfinance profile names."""
+    aliases: list[str] = []
+    for name in names:
+        raw = str(name or "").strip()
+        cleaned = _clean_company_name(raw)
+        candidates = [raw, cleaned]
+
+        # Finance names often include "Entertainment", "Holdings", etc. Keep a shorter
+        # leading phrase as another alias so Dave & Buster's Entertainment matches Dave & Buster.
+        words = cleaned.split()
+        if len(words) >= 2:
+            candidates.append(" ".join(words[:2]))
+        if len(words) >= 3:
+            candidates.append(" ".join(words[:3]))
+
+        # Handle apostrophe/ampersand variations that are common in news feeds.
+        expanded: list[str] = []
+        for candidate in candidates:
+            c = str(candidate or "").strip()
+            if not c:
+                continue
+            expanded.extend(
+                {
+                    c,
+                    c.replace("&", "and"),
+                    c.replace(" and ", " & "),
+                    c.replace("'", ""),
+                    c.replace("’", ""),
+                }
+            )
+        for candidate in expanded:
+            candidate = re.sub(r"\s+", " ", candidate).strip(" ,.-")
+            if len(candidate) >= 3 and candidate.lower() not in {"inc", "corp", "company", "group", "holdings"}:
+                aliases.append(candidate)
+
+    # For ambiguous tickers like PLAY, do not let the ticker dominate broad search.
+    ticker = str(ticker or "").upper().strip()
+    if ticker and ticker not in AMBIGUOUS_TICKERS and len(ticker) > 2:
+        aliases.append(ticker)
+
+    # Deduplicate while preserving order.
+    seen: set[str] = set()
+    unique: list[str] = []
+    for alias in aliases:
+        key = _compact_company_phrase(alias)
+        if key and key not in seen:
+            seen.add(key)
+            unique.append(alias)
+    return unique[:8]
+
+
+@lru_cache(maxsize=256)
+def resolve_company_profile(ticker: str) -> dict[str, Any]:
+    """Resolve a ticker into company identity metadata for safer news search."""
+    ticker = str(ticker or "").upper().strip()
+    long_name = ""
+    short_name = ""
+    exchange = ""
+    quote_type = ""
+    sector = ""
+    industry = ""
+
+    if ticker:
+        try:
+            info = yf.Ticker(ticker).get_info() or {}
+            long_name = str(info.get("longName") or "").strip()
+            short_name = str(info.get("shortName") or "").strip()
+            exchange = str(info.get("exchange") or info.get("fullExchangeName") or "").strip()
+            quote_type = str(info.get("quoteType") or "").strip()
+            sector = str(info.get("sector") or "").strip()
+            industry = str(info.get("industry") or "").strip()
+        except Exception:
+            # yfinance profile lookup may fail even when price/news download works.
+            pass
+
+    if not long_name and not short_name and ticker in COMPANY_NAME_OVERRIDES:
+        long_name = COMPANY_NAME_OVERRIDES[ticker]
+
+    display_name = long_name or short_name or ticker
+    aliases = _company_aliases_from_names(ticker, long_name, short_name, display_name)
+    if not aliases and ticker:
+        aliases = [ticker]
+
+    return {
+        "ticker": ticker,
+        "company_name": display_name,
+        "long_name": long_name,
+        "short_name": short_name,
+        "aliases": aliases,
+        "exchange": exchange,
+        "quote_type": quote_type,
+        "sector": sector,
+        "industry": industry,
+        "ambiguous_ticker": ticker in AMBIGUOUS_TICKERS or len(ticker) <= 2,
+    }
+
+
+def _newsapi_query_for_profile(profile: dict[str, Any]) -> str:
+    """Build a company-name-first NewsAPI query."""
+    ticker = str(profile.get("ticker") or "").upper()
+    aliases = [a for a in profile.get("aliases", []) if a]
+
+    phrase_parts: list[str] = []
+    for alias in aliases[:5]:
+        # Raw tickers are useful for AAPL/MSFT but dangerous for PLAY/ON/GO.
+        if alias.upper() == ticker and profile.get("ambiguous_ticker"):
+            continue
+        phrase_parts.append(f'"{alias}"' if " " in alias or "&" in alias or "'" in alias else alias)
+
+    if ticker and not profile.get("ambiguous_ticker"):
+        phrase_parts.append(ticker)
+
+    if not phrase_parts:
+        phrase_parts = [ticker]
+
+    # Company phrase first, then finance context. This avoids generic word matches like PLAY in sports/entertainment.
+    company_part = " OR ".join(dict.fromkeys(phrase_parts))
+    finance_part = 'stock OR shares OR earnings OR revenue OR analyst OR "price target" OR investors OR NYSE OR NASDAQ'
+    return f"({company_part}) AND ({finance_part})"
+
+
+def _ticker_context_match(text: str, ticker: str) -> bool:
+    ticker = str(ticker or "").upper().strip()
+    if not ticker:
+        return False
+    patterns = [
+        rf"\({re.escape(ticker)}\)",
+        rf"\bNYSE\s*[:\-]?\s*{re.escape(ticker)}\b",
+        rf"\bNASDAQ\s*[:\-]?\s*{re.escape(ticker)}\b",
+        rf"\b{re.escape(ticker)}\s+(stock|shares|earnings|analyst|price target)\b",
+    ]
+    return any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in patterns)
+
+
+def _finance_context_score(text: str) -> int:
+    lower = text.lower()
+    return sum(1 for term in FINANCE_CONTEXT_TERMS if term in lower)
+
+
+def score_news_relevance(row: dict[str, Any] | pd.Series, profile: dict[str, Any]) -> float:
+    """Score how likely a headline is actually about the selected company."""
+    title = str(row.get("title", "") or "")
+    summary = str(row.get("summary", "") or "")
+    url = str(row.get("url", "") or "")
+    text = f"{title} {summary} {url}"
+    compact_text = _compact_company_phrase(text)
+    ticker = str(profile.get("ticker") or "").upper()
+    aliases = profile.get("aliases", []) or []
+
+    score = 0.0
+    matched_alias = False
+    for alias in aliases:
+        alias_key = _compact_company_phrase(alias)
+        if not alias_key:
+            continue
+        # Avoid matching tiny/generic aliases like "play" unless it appears in ticker context.
+        if alias_key == ticker.lower() and profile.get("ambiguous_ticker"):
+            continue
+        if alias_key in compact_text:
+            score += 6.0 if len(alias_key.split()) >= 2 else 3.0
+            matched_alias = True
+            break
+
+    if _ticker_context_match(text, ticker):
+        score += 3.0
+
+    finance_score = _finance_context_score(text)
+    if finance_score:
+        score += min(2.0, finance_score * 0.5)
+
+    # Company endpoint sources deserve a small trust bump, but not enough to keep unrelated broad NewsAPI rows.
+    source = str(row.get("source", "") or "").lower()
+    if source in {"finnhub", "yfinance"}:
+        score += 1.0
+
+    # If there is no company/ticker match, finance context alone is not enough.
+    if not matched_alias and not _ticker_context_match(text, ticker):
+        return min(score, 2.0)
+
+    return float(score)
+
+
+def filter_relevant_news(df: pd.DataFrame, profile: dict[str, Any], max_items: int = 20, min_score: float = 4.0) -> pd.DataFrame:
+    """Filter broad news results to company-relevant items."""
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    data = df.copy()
+    data["relevance_score"] = data.apply(lambda row: score_news_relevance(row, profile), axis=1)
+    data["company_name"] = profile.get("company_name") or profile.get("ticker")
+    data["company_aliases"] = ", ".join(profile.get("aliases", [])[:5])
+
+    # yfinance and Finnhub are already ticker/company endpoints, but still remove obviously irrelevant rows.
+    # NewsAPI is broad search, so it must satisfy the same relevance threshold.
+    filtered = data[data["relevance_score"] >= min_score].copy()
+    if filtered.empty:
+        return filtered
+
+    filtered["published_at"] = pd.to_datetime(filtered["published_at"], errors="coerce")
+    return filtered.sort_values(["published_at", "relevance_score"], ascending=[False, False]).head(max_items).reset_index(drop=True)
+
+
 def fetch_yfinance_news(ticker: str, max_items: int = 20) -> pd.DataFrame:
     """Fetch recent ticker news from yfinance. No API key, no billing."""
     ticker = ticker.strip().upper()
@@ -165,7 +422,9 @@ def fetch_yfinance_news(ticker: str, max_items: int = 20) -> pd.DataFrame:
             }
         )
 
-    return pd.DataFrame(rows)
+    raw_df = pd.DataFrame(rows)
+    profile = resolve_company_profile(ticker)
+    return filter_relevant_news(raw_df, profile, max_items=max_items, min_score=4.0)
 
 
 def fetch_finnhub_news(ticker: str, max_items: int = 20, days_back: int = 14) -> pd.DataFrame:
@@ -188,7 +447,7 @@ def fetch_finnhub_news(ticker: str, max_items: int = 20, days_back: int = 14) ->
         return pd.DataFrame()
 
     rows: list[dict[str, Any]] = []
-    for item in items[:max_items]:
+    for item in items:
         title = item.get("headline") or ""
         if not title:
             continue
@@ -204,7 +463,9 @@ def fetch_finnhub_news(ticker: str, max_items: int = 20, days_back: int = 14) ->
                 "source": "finnhub",
             }
         )
-    return pd.DataFrame(rows)
+    raw_df = pd.DataFrame(rows)
+    profile = resolve_company_profile(ticker)
+    return filter_relevant_news(raw_df, profile, max_items=max_items, min_score=3.5)
 
 
 def fetch_newsapi_news(ticker: str, max_items: int = 20, days_back: int = 14) -> pd.DataFrame:
@@ -214,14 +475,17 @@ def fetch_newsapi_news(ticker: str, max_items: int = 20, days_back: int = 14) ->
         return pd.DataFrame()
 
     ticker = ticker.strip().upper()
+    profile = resolve_company_profile(ticker)
+    query = _newsapi_query_for_profile(profile)
     from_date = (datetime.utcnow().date() - timedelta(days=days_back)).isoformat()
     url = "https://newsapi.org/v2/everything"
     params = {
-        "q": ticker,
+        "q": query,
+        "searchIn": "title,description",
         "from": from_date,
         "language": "en",
         "sortBy": "publishedAt",
-        "pageSize": min(max_items, 100),
+        "pageSize": min(max_items * 3, 100),
         "apiKey": api_key,
     }
 
@@ -234,7 +498,7 @@ def fetch_newsapi_news(ticker: str, max_items: int = 20, days_back: int = 14) ->
         return pd.DataFrame()
 
     rows: list[dict[str, Any]] = []
-    for item in items[:max_items]:
+    for item in items:
         title = item.get("title") or ""
         if not title:
             continue
@@ -251,7 +515,8 @@ def fetch_newsapi_news(ticker: str, max_items: int = 20, days_back: int = 14) ->
                 "source": "newsapi",
             }
         )
-    return pd.DataFrame(rows)
+    raw_df = pd.DataFrame(rows)
+    return filter_relevant_news(raw_df, profile, max_items=max_items, min_score=4.0)
 
 
 def _deduplicate_news(df: pd.DataFrame, max_items: int) -> pd.DataFrame:
@@ -326,6 +591,7 @@ def fetch_news_for_ticker(
     """Fetch news using a selected free-safe source strategy with local caching."""
     source = source or "yfinance"
     ticker = ticker.strip().upper()
+    profile = resolve_company_profile(ticker)
     meta: dict[str, Any] = {
         "requested_source": source,
         "source_used": None,
@@ -334,17 +600,28 @@ def fetch_news_for_ticker(
         "api_key_found": False,
         "fallback_used": False,
         "cache_used": False,
+        "company_name": profile.get("company_name") or ticker,
+        "company_aliases": profile.get("aliases", []),
+        "newsapi_query": _newsapi_query_for_profile(profile),
+        "relevance_filter": "company-name/ticker-context relevance filter enabled",
         "notes": [],
     }
 
     if use_cache and not force_refresh:
         cached = load_news_from_cache(ticker=ticker, max_age_hours=cache_max_age_hours, max_items=max_items)
         if not cached.empty:
-            meta["source_used"] = "local_cache"
-            meta["sources_used"] = sorted(cached["source"].dropna().astype(str).unique().tolist())
-            meta["cache_used"] = True
-            meta["notes"].append(f"Used local news cache younger than {cache_max_age_hours:g} hours.")
-            return cached, meta
+            cached_count = len(cached)
+            cached = filter_relevant_news(cached, profile, max_items=max_items, min_score=4.0)
+            if not cached.empty:
+                meta["source_used"] = "local_cache"
+                meta["sources_used"] = sorted(cached["source"].dropna().astype(str).unique().tolist())
+                meta["cache_used"] = True
+                removed = cached_count - len(cached)
+                meta["notes"].append(f"Used local news cache younger than {cache_max_age_hours:g} hours.")
+                if removed > 0:
+                    meta["notes"].append(f"Relevance filter removed {removed} cached unrelated headline(s).")
+                return cached, meta
+            meta["notes"].append("Cached headlines were present but none passed company relevance filtering; refreshing news.")
 
     if source == "all_configured":
         df, sources_used, notes = _fetch_all_configured_sources(ticker, max_items=max_items, days_back=days_back)

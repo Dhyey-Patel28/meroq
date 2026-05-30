@@ -18,10 +18,19 @@ If optional NLP packages are not installed or a Hugging Face model cannot load, 
 
 Hugging Face models run locally after first download. No Hugging Face API key is required for the public models used here.
 
-## Current limitation
+## Company-aware news matching
 
-Sentiment is currently displayed as context. The next modeling step is to save dated sentiment features and compare models with vs. without sentiment features.
+Meroq resolves each ticker into a company profile before broad news search. For example, an ambiguous ticker such as `PLAY` is treated as Dave & Buster's rather than the common word "play".
 
+The news layer now uses:
+
+- company name and alias generation;
+- company-name-first NewsAPI queries;
+- ticker-context matching such as `(PLAY)`, `NYSE:PLAY`, or `PLAY stock`;
+- finance-context terms such as earnings, shares, revenue, analyst, and price target;
+- relevance scores before sentiment scoring.
+
+Broad NewsAPI rows that only match generic words are filtered out before they can affect sentiment. Cached news is filtered again at read time so older irrelevant cache rows do not pollute the current analysis.
 
 ## Signal fusion
 

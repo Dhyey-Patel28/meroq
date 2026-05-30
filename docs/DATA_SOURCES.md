@@ -24,3 +24,8 @@ Market data is stored in `data/market_data.sqlite`.
 News data is stored in `data/news_cache.sqlite`.
 
 Both generated database files are ignored by Git.
+
+
+## Company-aware NewsAPI search
+
+Raw ticker search is not reliable for ambiguous tickers such as `PLAY`, `ON`, `GO`, or `NOW`. Meroq resolves the ticker into a company name and searches NewsAPI with company aliases plus financial context terms. Returned rows are relevance-scored and filtered before sentiment scoring.
