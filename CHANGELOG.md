@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.2 — Stable report downloads
+
+### Fixed
+
+- Updated report and watchlist CSV download buttons so downloads do not trigger a full Streamlit rerun.
+- Preserved the current analysis results after downloading a Markdown report or watchlist CSV.
+- Kept company-aware news matching from 1.0.1.
+
 ## 1.0.1 — Company-aware news matching
 
 ### Fixed

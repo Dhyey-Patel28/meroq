@@ -6,7 +6,7 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**1.0.1 — Company-aware news matching**
+**1.0.2 — Stable report downloads + company-aware news matching**
 
 This release improves news quality for sentiment analysis:
 

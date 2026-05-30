@@ -1252,6 +1252,7 @@ def render_report_section(
                 file_name=f"meroq_{ticker.upper()}_report.md",
                 mime="text/markdown",
                 key=f"download_report_{ticker}_{selected_model_label}",
+                on_click="ignore",
                 width="stretch",
             )
         with col_b:
@@ -1268,6 +1269,7 @@ def render_report_section(
                 file_name="meroq_watchlist_scan.csv",
                 mime="text/csv",
                 key=f"download_watchlist_csv_{ticker}_{selected_model_label}",
+                on_click="ignore",
                 width="stretch",
             )
 
@@ -1277,7 +1279,7 @@ def render_roadmap_section() -> None:
         st.subheader("Production-minded upgrade path")
         st.markdown(
             """
-            **Current release: 1.0.1 — Company-aware news matching and exportable insight reports.**
+            **Current release: 1.0.2 — Stable report downloads and company-aware news matching.**
 
             This release adds a multi-ticker intelligence layer and a downloadable report workflow:
 
