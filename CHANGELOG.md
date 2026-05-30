@@ -1,12 +1,15 @@
 # Changelog
 
-## 1.0.2 — Stable report downloads
+## 1.1.0 — Deployment readiness and cleaner product UI
 
-### Fixed
+### Changed
 
-- Updated report and watchlist CSV download buttons so downloads do not trigger a full Streamlit rerun.
-- Preserved the current analysis results after downloading a Markdown report or watchlist CSV.
-- Kept company-aware news matching from 1.0.1.
+- Removed the internal Production Roadmap tab from the main Results interface.
+- Kept roadmap/deployment guidance in documentation instead of product tabs.
+- Added deployment guidance for local use, hosted demos, and secrets handling.
+- Added a frontend migration plan for a future FastAPI + Next.js architecture.
+- Added an example Streamlit secrets file for hosted environments.
+- Updated README to explain the current Streamlit-first direction and future migration path.
 
 ## 1.0.1 — Company-aware news matching
 

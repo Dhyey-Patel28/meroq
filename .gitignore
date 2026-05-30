@@ -38,6 +38,3 @@ hf_cache/
 
 # Keep data directory present
 !data/.gitkeep
-
-
-.zip

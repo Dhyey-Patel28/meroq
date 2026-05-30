@@ -59,7 +59,7 @@ from src.reporting import build_insight_report
 st.set_page_config(page_title="Meroq", page_icon="📈", layout="wide")
 
 st.title("📈 Meroq")
-st.caption("Predictive market intelligence with model comparison, news sentiment, risk simulation, watchlist scanning, and exportable reports.")
+st.caption("Local-first market intelligence with model comparison, news sentiment, risk simulation, watchlist scanning, and exportable reports.")
 
 st.markdown(
     """
@@ -375,7 +375,7 @@ results_root_tab, run_details_root_tab = st.tabs(["Results", "Run Details"])
 
 with results_root_tab:
     summary_placeholder = st.empty()
-    tab_prediction, tab_watchlist, tab_report, tab_chart, tab_risk, tab_sentiment, tab_sentiment_modeling, tab_walk_forward, tab_comparison, tab_model, tab_data, tab_roadmap = st.tabs(
+    tab_prediction, tab_watchlist, tab_report, tab_chart, tab_risk, tab_sentiment, tab_sentiment_modeling, tab_walk_forward, tab_comparison, tab_model, tab_data = st.tabs(
         [
             "Prediction",
             "Watchlist",
@@ -388,7 +388,6 @@ with results_root_tab:
             "Model Comparison",
             "Model Details",
             "Data Manager",
-            "Production Roadmap",
         ]
     )
 
@@ -414,8 +413,6 @@ with results_root_tab:
         model_details_placeholder = st.empty()
     with tab_data:
         data_manager_placeholder = st.empty()
-    with tab_roadmap:
-        roadmap_placeholder = st.empty()
 
 with run_details_root_tab:
     st.subheader("Run Details")
@@ -477,8 +474,6 @@ def render_waiting_state() -> None:
         st.info("Model details will appear after the primary model finishes training.")
     with data_manager_placeholder.container():
         st.info("Data tables will appear after price data is downloaded.")
-    render_roadmap_section()
-
     render_run_details(progress=0, progress_text="Idle — waiting for a run")
 
 
@@ -1252,7 +1247,6 @@ def render_report_section(
                 file_name=f"meroq_{ticker.upper()}_report.md",
                 mime="text/markdown",
                 key=f"download_report_{ticker}_{selected_model_label}",
-                on_click="ignore",
                 width="stretch",
             )
         with col_b:
@@ -1269,34 +1263,9 @@ def render_report_section(
                 file_name="meroq_watchlist_scan.csv",
                 mime="text/csv",
                 key=f"download_watchlist_csv_{ticker}_{selected_model_label}",
-                on_click="ignore",
                 width="stretch",
             )
 
-
-def render_roadmap_section() -> None:
-    with roadmap_placeholder.container():
-        st.subheader("Production-minded upgrade path")
-        st.markdown(
-            """
-            **Current release: 1.0.2 — Stable report downloads and company-aware news matching.**
-
-            This release adds a multi-ticker intelligence layer and a downloadable report workflow:
-
-            1. Scans a configurable watchlist with a fast local model.
-            2. Combines model probability, recent-news sentiment, trend, and risk into a transparent Meroq Score.
-            3. Shows ranked candidates, high-risk names, and uncertain names.
-            4. Keeps advanced walk-forward and model-comparison tools optional so the app remains responsive.
-
-            Next production-minded upgrades:
-
-            1. Exportable single-ticker and watchlist reports.
-            2. A cleaner landing page and public demo configuration.
-            3. Portfolio-level risk views.
-            4. Scheduled local refresh tasks for prices/news/sentiment.
-            5. PostgreSQL if deployment/data scale needs grow.
-            """
-        )
 
 
 def simple_comparison_progress(payload: dict) -> None:
@@ -1416,8 +1385,6 @@ with model_details_placeholder.container():
     st.info("Waiting for primary model details...")
 with data_manager_placeholder.container():
     st.info("Waiting for data...")
-render_roadmap_section()
-
 try:
     update_run_monitor("Price data", "running", f"Downloading {ticker} {period} {interval} in {analysis_mode}", 5)
     raw_df = fetch_price_data(ticker=ticker, period=period, interval=interval)
@@ -1825,7 +1792,7 @@ try:
         "complete",
         "All result sections are ready",
         100,
-        "Dashboard is ready: Prediction, Watchlist, Report, Chart, Risk Simulation, News Sentiment, Sentiment Modeling, Backtest, Model Comparison, Model Details, Data Manager, and Roadmap sections are loaded.",
+        "Dashboard is ready: Prediction, Watchlist, Report, Chart, Risk Simulation, News Sentiment, Sentiment Modeling, Backtest, Model Comparison, Model Details, and Data Manager sections are loaded.",
     )
 
 except Exception as exc:

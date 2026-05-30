@@ -6,16 +6,15 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**1.0.2 — Stable report downloads + company-aware news matching**
+**1.1.0 — Deployment readiness and cleaner product UI**
 
-This release improves news quality for sentiment analysis:
+This release prepares Meroq for a public-facing repository and future hosted demo:
 
-- Resolves tickers into actual company names before news search
-- Uses company-name-first NewsAPI queries instead of broad raw ticker searches
-- Adds company alias matching for names such as Dave & Buster's / Dave Busters
-- Filters broad news results by company relevance before sentiment scoring
-- Applies the same relevance filter to local cached headlines
-- Keeps the watchlist intelligence dashboard, report exports, sentiment modeling, risk simulation, and local data-layer tools available
+- Removes the internal Production Roadmap tab from the main results interface
+- Keeps roadmap and deployment guidance in documentation instead of product tabs
+- Adds deployment guidance for local use, Streamlit-style hosting, and secret handling
+- Adds a frontend migration plan for a future React/Next.js interface
+- Keeps the current Streamlit app as the fastest research and prototyping surface
 
 ## Core capabilities
 
@@ -61,6 +60,15 @@ The single `requirements.txt` includes the dashboard, modeling libraries, local 
 ```powershell
 python -m streamlit run app.py
 ```
+
+## Deployment and frontend direction
+
+Meroq currently uses Streamlit because it is the fastest way to iterate on data science workflows, model diagnostics, and research UX. A React/Next.js frontend is a good future direction after the backend/API boundary is stable.
+
+Read:
+
+- `docs/DEPLOYMENT.md` for local/public-demo guidance and secrets handling
+- `docs/FRONTEND_MIGRATION.md` for the Streamlit-to-FastAPI/Next.js migration plan
 
 ## Optional API keys
 
