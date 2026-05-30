@@ -95,3 +95,15 @@ For local users, SQLite remains fine. For hosted/shared use, use PostgreSQL or a
 ## Recommendation
 
 Keep Streamlit through the next few releases. Use it as the research workbench. Add FastAPI before React/Next.js. Then build a Next.js UI only when the backend is stable enough to be a product API.
+## Release 1.3.0 update
+
+Meroq now has a first reusable service entry point in `src/services.py`. This means the future FastAPI backend does not need to scrape Streamlit state or duplicate analysis code. The first endpoint can be a thin wrapper around `run_single_ticker_analysis()`.
+
+Candidate future endpoint:
+
+```text
+POST /api/analyze-ticker
+```
+
+Request body mirrors `SingleTickerAnalysisRequest`; response body can start from the `summary` object and add optional tables as separate endpoints.
+

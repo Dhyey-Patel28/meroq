@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0 — Service layer extraction
+
+### Added
+
+- Added `src/services.py` with a reusable `SingleTickerAnalysisRequest` and `run_single_ticker_analysis()` entry point.
+- Added `scripts/analyze_ticker.py` so the core single-ticker analysis can run without Streamlit.
+- Added `docs/SERVICE_LAYER.md` documenting the service contract and future FastAPI/Next.js migration path.
+- Added `notebooks/09_service_layer_research.ipynb` as a lightweight research notebook for using the service layer.
+
+### Changed
+
+- Clarified the README around command-line usage and the Streamlit-to-service separation.
+
 ## 1.2.1 — Senior QA polish and predictable analysis modes
 
 ### Fixed
