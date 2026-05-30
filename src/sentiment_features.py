@@ -96,3 +96,69 @@ def build_latest_sentiment_feature_row(daily_sentiment: pd.DataFrame) -> dict:
         "negative_ratio": float(row.get("negative_ratio", 0.0) or 0.0),
         "confidence_mean": float(row.get("confidence_mean", 0.0) or 0.0),
     }
+
+
+def merge_daily_sentiment_frames(frames: list[pd.DataFrame | None]) -> pd.DataFrame:
+    """Merge current-run and persisted daily sentiment features into one clean date-level table.
+
+    The app can generate daily sentiment in the current run and also load previously
+    persisted daily features from the local cache. This helper combines those sources
+    while avoiding duplicate date rows. If duplicate rows exist for the same ticker/date,
+    the row with the highest headline count is kept because it usually contains the
+    broadest context for that day.
+    """
+    usable = []
+    for frame in frames:
+        if frame is None or frame.empty:
+            continue
+        data = frame.copy()
+        if "date" not in data.columns:
+            continue
+        if "ticker" not in data.columns:
+            data["ticker"] = ""
+        for col in [
+            "headline_count",
+            "sentiment_mean",
+            "sentiment_std",
+            "positive_ratio",
+            "negative_ratio",
+            "neutral_ratio",
+            "confidence_mean",
+        ]:
+            if col not in data.columns:
+                data[col] = 0.0
+            data[col] = pd.to_numeric(data[col], errors="coerce").fillna(0.0)
+        data["date"] = pd.to_datetime(data["date"], errors="coerce").dt.date.astype("string")
+        data["ticker"] = data["ticker"].astype(str).str.upper()
+        data = data.dropna(subset=["date"])
+        usable.append(data[[
+            "date",
+            "ticker",
+            "headline_count",
+            "sentiment_mean",
+            "sentiment_std",
+            "positive_ratio",
+            "negative_ratio",
+            "neutral_ratio",
+            "confidence_mean",
+        ]])
+
+    if not usable:
+        return pd.DataFrame(
+            columns=[
+                "date",
+                "ticker",
+                "headline_count",
+                "sentiment_mean",
+                "sentiment_std",
+                "positive_ratio",
+                "negative_ratio",
+                "neutral_ratio",
+                "confidence_mean",
+            ]
+        )
+
+    merged = pd.concat(usable, ignore_index=True)
+    merged = merged.sort_values(["date", "ticker", "headline_count"], ascending=[False, True, False])
+    merged = merged.drop_duplicates(subset=["date", "ticker"], keep="first")
+    return merged.sort_values("date", ascending=False).reset_index(drop=True)

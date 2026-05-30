@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.8.2 — Product UX polish
+
+### Changed
+
+- Collapsed advanced sidebar controls into focused sections so the default screen is less cluttered.
+- Reset default widget keys so Fast mode starts with XGBoost and practical settings instead of previously persisted heavy settings.
+- Simplified the Prediction tab to show the final signal, probability, sentiment overlay, and market snapshot first.
+- Moved the simple split diagnostic chart behind an expander.
+- Moved sentiment modeling readiness details and raw sentiment feature previews behind expanders.
+- Updated the roadmap copy to reflect a product-polish release.
+
+## 0.8.1
+
+- Fixed duplicate Streamlit chart keys when the prediction panel re-renders after sentiment fusion.
+- Fixed `scripts/refresh_sentiment_features.py` so it can be run directly from the project root.
+- Improved sentiment modeling readiness by combining persisted daily sentiment features with the current run.
+- Added daily sentiment feature inventory to `scripts/inspect_data_store.py`.
+
+
+## 0.8.0 — Sentiment feature store and modeling readiness
+
+### Added
+
+- Sentiment Modeling tab for feature readiness and experimental modeling comparison.
+- `src/sentiment_modeling.py` for lagged sentiment feature joins and technical vs. sentiment-enhanced simple-split tests.
+- Daily sentiment feature persistence in the local news database.
+- Sentiment feature inventory in the Data Manager.
+- `scripts/refresh_sentiment_features.py` for watchlist-level sentiment feature refreshes.
+- `docs/SENTIMENT_MODELING.md` and `notebooks/06_sentiment_aware_modeling.ipynb`.
+
+### Changed
+
+- Roadmap now separates latest-news signal fusion from historical sentiment-aware modeling.
+- Daily sentiment features are saved when News Sentiment runs, making repeated research runs easier to inspect.
+
 ## 0.7.0 — Sentiment-aware signal fusion
 
 ### Added

@@ -38,3 +38,8 @@ The current prediction stack has two layers:
 2. **Signal fusion layer** — recent-news sentiment is converted into a capped probability adjustment and shown separately from the base model output.
 
 This keeps the dashboard explainable while preparing the project for historical sentiment-aware training.
+
+
+## Sentiment modeling layer
+
+Release 0.8.0 adds a separate sentiment modeling layer. The recent-news signal overlay remains a transparent adjustment to the latest prediction, while `src/sentiment_modeling.py` joins lagged daily sentiment features to historical model rows for experimental model comparison. This separation keeps the dashboard honest about what is recent context and what is historically trained signal.

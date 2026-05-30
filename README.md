@@ -6,18 +6,19 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**0.7.0 — Sentiment-aware signal fusion**
+**0.8.2 — Sentiment feature store and modeling readiness**
 
-This release adds a transparent signal-fusion layer that combines the base ML prediction with recent-news sentiment:
+This release starts turning recent-news NLP into model-ready features:
 
 - Local SQLite market-data inventory with refresh metadata
 - Local SQLite news cache to reduce repeated API calls
 - Multi-source news aggregation with yfinance, Finnhub, and optional NewsAPI
 - Local Hugging Face finance sentiment engines installed through a single `requirements.txt`
 - Sentiment-aware signal overlay that keeps the base model probability visible
-- Conservative probability adjustment from recent-news sentiment
-- Daily sentiment feature aggregation for future historical sentiment modeling
-- Scripts for data refresh, data-store inspection, news smoke tests, and model downloads
+- Daily sentiment feature persistence for ticker/date/model/source combinations
+- New Sentiment Modeling tab with feature coverage/readiness checks
+- Experimental technical-only vs. technical + lagged sentiment model comparison
+- Scripts for data refresh, data-store inspection, sentiment feature refresh, news smoke tests, and model downloads
 
 ## Core capabilities
 
@@ -42,6 +43,8 @@ This release adds a transparent signal-fusion layer that combines the base ML pr
 - Score headlines with lightweight or local Hugging Face financial sentiment models
 - Combine model probability with recent-news sentiment as a transparent signal overlay
 - Aggregate headline sentiment into daily feature rows
+- Persist daily sentiment features to the local data layer
+- Compare technical-only and sentiment-enhanced model variants when coverage is sufficient
 - Cache market/news data locally
 
 ## Installation

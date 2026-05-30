@@ -361,3 +361,143 @@ def inspect_news_cache(db_path: Path = NEWS_CACHE_DB_PATH) -> pd.DataFrame:
             """,
             conn,
         )
+
+
+def ensure_sentiment_features_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sentiment_daily_features (
+            ticker TEXT NOT NULL,
+            date TEXT NOT NULL,
+            engine TEXT,
+            source_used TEXT,
+            headline_count INTEGER,
+            sentiment_mean REAL,
+            sentiment_std REAL,
+            positive_ratio REAL,
+            negative_ratio REAL,
+            neutral_ratio REAL,
+            confidence_mean REAL,
+            cached_at_utc TEXT NOT NULL,
+            PRIMARY KEY (ticker, date, engine, source_used)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sentiment_daily_ticker ON sentiment_daily_features(ticker)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sentiment_daily_date ON sentiment_daily_features(date)")
+
+
+def save_daily_sentiment_features(
+    df: pd.DataFrame,
+    ticker: str,
+    engine: str = "unknown",
+    source_used: str = "unknown",
+    db_path: Path = NEWS_CACHE_DB_PATH,
+) -> None:
+    """Persist aggregated daily sentiment features to the local news database."""
+    if df is None or df.empty:
+        return
+
+    data = df.copy()
+    for col in [
+        "date",
+        "headline_count",
+        "sentiment_mean",
+        "sentiment_std",
+        "positive_ratio",
+        "negative_ratio",
+        "neutral_ratio",
+        "confidence_mean",
+    ]:
+        if col not in data.columns:
+            data[col] = 0
+
+    rows = []
+    cached_at = utc_now_iso()
+    for _, row in data.iterrows():
+        rows.append(
+            (
+                ticker.upper(),
+                str(row.get("date", "")),
+                str(engine),
+                str(source_used),
+                int(float(row.get("headline_count", 0) or 0)),
+                float(row.get("sentiment_mean", 0.0) or 0.0),
+                float(row.get("sentiment_std", 0.0) or 0.0),
+                float(row.get("positive_ratio", 0.0) or 0.0),
+                float(row.get("negative_ratio", 0.0) or 0.0),
+                float(row.get("neutral_ratio", 0.0) or 0.0),
+                float(row.get("confidence_mean", 0.0) or 0.0),
+                cached_at,
+            )
+        )
+
+    with _connect(db_path) as conn:
+        ensure_sentiment_features_table(conn)
+        conn.executemany(
+            """
+            INSERT OR REPLACE INTO sentiment_daily_features (
+                ticker, date, engine, source_used, headline_count, sentiment_mean, sentiment_std,
+                positive_ratio, negative_ratio, neutral_ratio, confidence_mean, cached_at_utc
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
+
+
+def load_daily_sentiment_features(
+    ticker: str,
+    engine: str | None = None,
+    source_used: str | None = None,
+    db_path: Path = NEWS_CACHE_DB_PATH,
+) -> pd.DataFrame:
+    """Load persisted daily sentiment features for one ticker."""
+    if not db_path.exists():
+        return pd.DataFrame()
+
+    clauses = ["ticker = ?"]
+    params: list[Any] = [ticker.upper()]
+    if engine:
+        clauses.append("engine = ?")
+        params.append(engine)
+    if source_used:
+        clauses.append("source_used = ?")
+        params.append(source_used)
+
+    query = f"""
+        SELECT ticker, date, headline_count, sentiment_mean, sentiment_std,
+               positive_ratio, negative_ratio, neutral_ratio, confidence_mean,
+               engine, source_used, cached_at_utc
+        FROM sentiment_daily_features
+        WHERE {' AND '.join(clauses)}
+        ORDER BY date DESC
+    """
+    with sqlite3.connect(db_path) as conn:
+        ensure_sentiment_features_table(conn)
+        return pd.read_sql(query, conn, params=params)
+
+
+def inspect_sentiment_features(db_path: Path = NEWS_CACHE_DB_PATH) -> pd.DataFrame:
+    """Return inventory of persisted daily sentiment features."""
+    if not db_path.exists():
+        return pd.DataFrame(columns=["ticker", "engine", "source_used", "rows", "first_date", "latest_date", "last_cached_at_utc"])
+
+    with sqlite3.connect(db_path) as conn:
+        ensure_sentiment_features_table(conn)
+        return pd.read_sql(
+            """
+            SELECT
+                ticker,
+                engine,
+                source_used,
+                COUNT(*) AS rows,
+                MIN(date) AS first_date,
+                MAX(date) AS latest_date,
+                MAX(cached_at_utc) AS last_cached_at_utc
+            FROM sentiment_daily_features
+            GROUP BY ticker, engine, source_used
+            ORDER BY ticker, engine, source_used
+            """,
+            conn,
+        )
