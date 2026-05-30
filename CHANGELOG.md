@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.0.0 - Exportable insight reports
+
+### Added
+- Added a dedicated Report tab for the current run.
+- Added downloadable Markdown reports summarizing prediction, sentiment, risk simulation, watchlist highlights, and model comparison results.
+- Added optional watchlist CSV export from the Report tab.
+- Added `src/reporting.py` to keep report generation separate from the Streamlit UI.
+
+### Changed
+- Replaced the static News Sentiment intro copy with a dynamic summary of the actual headlines, sentiment score, confidence, selected engine, and source used.
+- Updated the dashboard-ready message to include the new Report tab.
+
+### Notes
+- Reports are generated locally and do not include API keys or local cache databases.
+
+
+## 0.9.0 — Watchlist intelligence dashboard
+
+### Added
+
+- Watchlist tab for scanning a configurable universe of tickers.
+- `src/watchlist.py` for multi-ticker signal, sentiment, risk, and ranking logic.
+- `scripts/scan_watchlist.py` for command-line watchlist scans.
+- Watchlist sidebar controls for ticker universe, max tickers, sentiment, and risk toggles.
+- Meroq Score, a transparent 0–100 ranking score combining model probability, sentiment, trend, and downside-risk estimates.
+- Watchlist ranking table, score bar chart, probability-vs-risk scatter chart, and quick-read summary.
+- `docs/WATCHLIST_INTELLIGENCE.md` and `notebooks/07_watchlist_intelligence.ipynb`.
+
+### Changed
+
+- Production roadmap now points toward exportable reports, portfolio-level risk views, and scheduled refresh workflows.
+
 ## 0.8.2 — Product UX polish
 
 ### Changed

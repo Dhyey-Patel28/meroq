@@ -43,3 +43,8 @@ This keeps the dashboard explainable while preparing the project for historical 
 ## Sentiment modeling layer
 
 Release 0.8.0 adds a separate sentiment modeling layer. The recent-news signal overlay remains a transparent adjustment to the latest prediction, while `src/sentiment_modeling.py` joins lagged daily sentiment features to historical model rows for experimental model comparison. This separation keeps the dashboard honest about what is recent context and what is historically trained signal.
+
+
+## Watchlist intelligence
+
+The watchlist layer runs the single-ticker analysis pipeline across a small universe and creates a ranked scan table. It uses a fast XGBoost model by default, optional recent-news sentiment, optional lightweight Monte Carlo risk metrics, and a transparent Meroq Score for triage. The watchlist scan is intended for 5–20 symbols on a local machine; larger universes should move to scheduled batch jobs and a stronger database-backed service layer.

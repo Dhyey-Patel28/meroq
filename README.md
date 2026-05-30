@@ -6,19 +6,18 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**0.8.2 — Sentiment feature store and modeling readiness**
+**1.0.0 — Watchlist intelligence dashboard**
 
-This release starts turning recent-news NLP into model-ready features:
+This release adds a multi-ticker watchlist intelligence layer:
 
-- Local SQLite market-data inventory with refresh metadata
-- Local SQLite news cache to reduce repeated API calls
-- Multi-source news aggregation with yfinance, Finnhub, and optional NewsAPI
-- Local Hugging Face finance sentiment engines installed through a single `requirements.txt`
-- Sentiment-aware signal overlay that keeps the base model probability visible
-- Daily sentiment feature persistence for ticker/date/model/source combinations
-- New Sentiment Modeling tab with feature coverage/readiness checks
-- Experimental technical-only vs. technical + lagged sentiment model comparison
-- Scripts for data refresh, data-store inspection, sentiment feature refresh, news smoke tests, and model downloads
+- Configurable watchlist scan for a small universe of tickers
+- Fast XGBoost-based scan per ticker
+- Recent-news sentiment summary per symbol
+- Lightweight Monte Carlo risk metrics per symbol
+- Meroq Score: a transparent 0–100 ranking score using model probability, sentiment, trend, and downside risk
+- Watchlist tab with ranked table, score chart, risk/probability scatter chart, and quick-read summary
+- Command-line watchlist scan script
+- Existing sentiment modeling, risk simulation, model comparison, and local data-layer tools remain available
 
 ## Core capabilities
 
@@ -39,6 +38,7 @@ This release starts turning recent-news NLP into model-ready features:
 - Run walk-forward validation
 - Simulate strategy behavior with transaction costs
 - Run Monte Carlo price-risk simulation
+- Scan a watchlist and rank symbols with a transparent Meroq Score
 - Fetch recent company headlines
 - Score headlines with lightweight or local Hugging Face financial sentiment models
 - Combine model probability with recent-news sentiment as a transparent signal overlay
@@ -131,6 +131,12 @@ Test news + sentiment:
 python scripts/news_smoke_test.py --ticker AAPL --source all_configured --engine lightweight
 ```
 
+Run a watchlist scan from the command line:
+
+```powershell
+python scripts/scan_watchlist.py --tickers AAPL,MSFT,NVDA,SPY --period 5y --interval 1d
+```
+
 Download Hugging Face models ahead of time:
 
 ```powershell
@@ -148,6 +154,7 @@ meroq/
 │   ├── refresh_data.py
 │   ├── inspect_data_store.py
 │   ├── news_smoke_test.py
+│   ├── scan_watchlist.py
 │   └── download_hf_models.py
 ├── src/
 │   ├── backtesting.py
@@ -160,6 +167,7 @@ meroq/
 │   ├── sentiment_features.py
 │   ├── signal_fusion.py
 │   ├── risk_simulation.py
+│   ├── watchlist.py
 │   └── storage.py
 ├── docs/
 ├── notebooks/
@@ -179,3 +187,19 @@ Generated local files are ignored by Git:
 ## License
 
 See `LICENSE`.
+
+
+## Exportable Reports
+
+Meroq includes a **Report** tab that generates a local Markdown report for the current analysis run. The report summarizes:
+
+- latest model signal and probability
+- sentiment-aware probability adjustment
+- recent-news sentiment summary
+- Monte Carlo risk simulation summary
+- watchlist highlights
+- model comparison snapshot
+- interpretation notes and limitations
+
+Reports are generated locally in the browser session. They do not include API keys, `.env` values, SQLite databases, or local cache files.
+

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 from src.backtesting import compare_models_walk_forward, walk_forward_backtest
@@ -51,12 +52,14 @@ from src.sentiment_modeling import (
     analyze_sentiment_modeling_readiness,
     compare_base_vs_sentiment_simple_split,
 )
+from src.watchlist import scan_watchlist, summarize_watchlist_scan
+from src.reporting import build_insight_report
 
 
 st.set_page_config(page_title="Meroq", page_icon="📈", layout="wide")
 
 st.title("📈 Meroq")
-st.caption("Predictive market intelligence with advanced model comparison, news sentiment, risk, and signal modeling.")
+st.caption("Predictive market intelligence with model comparison, news sentiment, risk simulation, watchlist scanning, and exportable reports.")
 
 st.markdown(
     """
@@ -132,6 +135,38 @@ with st.sidebar:
     )
 
     run_button = st.button("Run prediction", type="primary", width="stretch")
+
+    with st.expander("Watchlist scan", expanded=False):
+        run_watchlist_scan = st.checkbox(
+            "Run watchlist intelligence scan",
+            value=False,
+            key="run_watchlist_scan_v90",
+            help="Scans multiple tickers with a fast model, recent sentiment, and lightweight risk metrics.",
+        )
+        watchlist_text = st.text_area(
+            "Watchlist tickers",
+            value=", ".join(DEFAULT_WATCHLIST),
+            key="watchlist_text_v90",
+            height=80,
+            help="Comma-separated symbols. Keep this under 20 tickers for responsive local runs.",
+        )
+        watchlist_max_tickers = st.selectbox(
+            "Max tickers to scan",
+            options=[5, 10, 15, 20],
+            index=1,
+            key="watchlist_max_tickers_v90",
+        )
+        watchlist_include_sentiment = st.checkbox(
+            "Include recent-news sentiment",
+            value=True,
+            key="watchlist_include_sentiment_v90",
+        )
+        watchlist_include_risk = st.checkbox(
+            "Include lightweight risk simulation",
+            value=True,
+            key="watchlist_include_risk_v90",
+        )
+        st.caption("Uses XGBoost with lighter settings by default so the scan stays practical.")
 
     with st.expander("Risk simulation", expanded=False):
         run_risk_simulation = st.checkbox(
@@ -340,9 +375,11 @@ results_root_tab, run_details_root_tab = st.tabs(["Results", "Run Details"])
 
 with results_root_tab:
     summary_placeholder = st.empty()
-    tab_prediction, tab_chart, tab_risk, tab_sentiment, tab_sentiment_modeling, tab_walk_forward, tab_comparison, tab_model, tab_data, tab_roadmap = st.tabs(
+    tab_prediction, tab_watchlist, tab_report, tab_chart, tab_risk, tab_sentiment, tab_sentiment_modeling, tab_walk_forward, tab_comparison, tab_model, tab_data, tab_roadmap = st.tabs(
         [
             "Prediction",
+            "Watchlist",
+            "Report",
             "Chart",
             "Risk Simulation",
             "News Sentiment",
@@ -357,6 +394,10 @@ with results_root_tab:
 
     with tab_prediction:
         prediction_placeholder = st.empty()
+    with tab_watchlist:
+        watchlist_placeholder = st.empty()
+    with tab_report:
+        report_placeholder = st.empty()
     with tab_chart:
         chart_placeholder = st.empty()
     with tab_risk:
@@ -394,6 +435,7 @@ RUN_STAGES = [
     "News sentiment",
     "Sentiment-aware signal",
     "Sentiment modeling",
+    "Watchlist scan",
     "Model comparison",
     "Primary walk-forward",
     "Walk-forward comparison",
@@ -415,6 +457,10 @@ def render_waiting_state() -> None:
 
     with prediction_placeholder.container():
         st.info("Prediction has not started yet.")
+    with watchlist_placeholder.container():
+        st.info("Watchlist scan will appear here if enabled in the sidebar.")
+    with report_placeholder.container():
+        st.info("Run a prediction to generate a downloadable Meroq insight report.")
     with chart_placeholder.container():
         st.info("Chart will load after price data and indicators are ready.")
     with risk_placeholder.container():
@@ -674,10 +720,21 @@ def render_sentiment_section(
     news_meta = news_meta or {}
     with sentiment_placeholder.container():
         st.subheader("News sentiment")
-        st.write(
-            "Stage 5.1 adds a free-safe financial NLP layer. Headlines can be scored with a lightweight fallback, "
-            "individual local Hugging Face finance models, or a local ensemble. Optional API keys are read from `.env` only."
-        )
+        if sentiment_summary is not None and sentiment_summary.get("available"):
+            headline_count = int(sentiment_summary.get("headline_count", 0) or 0)
+            overall_label = sentiment_summary.get("overall_label", "Unknown")
+            avg_score = float(sentiment_summary.get("average_score", 0.0) or 0.0)
+            confidence = float(sentiment_summary.get("confidence", 0.0) or 0.0)
+            st.write(
+                f"Meroq scored **{headline_count} recent headlines** for **{ticker.upper()}**. "
+                f"Current news tone is **{overall_label}** with an average sentiment score of "
+                f"**{avg_score:+.2f}** and confidence of **{confidence:.1%}**."
+            )
+        else:
+            st.write(
+                "Recent-news sentiment will appear here after headlines are fetched and scored. "
+                "Meroq can use yfinance, optional user-provided news API keys, and local Hugging Face models."
+            )
 
         with st.expander("Sentiment engine availability", expanded=False):
             st.dataframe(sentiment_engine_availability(), width="stretch", hide_index=True)
@@ -1040,28 +1097,192 @@ def render_data_manager_section(raw_df: pd.DataFrame | None = None, model_frame:
             st.dataframe(model_frame.tail(100), width="stretch")
 
 
+def render_watchlist_section(watchlist_df: pd.DataFrame | None, scan_summary: dict | None = None) -> None:
+    """Render the multi-ticker watchlist intelligence view."""
+    with watchlist_placeholder.container():
+        st.subheader("Watchlist intelligence")
+        st.write(
+            "Scan a small universe to compare model probability, recent sentiment, trend, and risk in one table. "
+            "This is meant for idea discovery, not automated trading."
+        )
+
+        if watchlist_df is None or watchlist_df.empty:
+            st.info("Watchlist scan was skipped. Enable **Run watchlist intelligence scan** in the sidebar.")
+            return
+
+        summary = scan_summary or summarize_watchlist_scan(watchlist_df)
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Tickers scanned", summary.get("tickers_scanned", 0))
+        c2.metric("Bullish names", summary.get("bullish_count", 0))
+        c3.metric("Positive sentiment", summary.get("positive_sentiment_count", 0))
+        c4.metric("High-risk names", summary.get("high_risk_count", 0))
+
+        ok_df = watchlist_df[watchlist_df["status"] == "ok"].copy()
+        if ok_df.empty:
+            st.warning("No watchlist tickers completed successfully. Check Run Details for errors.")
+            st.dataframe(watchlist_df, width="stretch", hide_index=True)
+            return
+
+        top_df = ok_df.sort_values("meroq_score", ascending=False).head(10)
+        display_cols = [
+            "ticker",
+            "latest_close",
+            "return_1d",
+            "base_signal",
+            "base_up_probability",
+            "sentiment_label",
+            "sentiment_score",
+            "final_signal",
+            "final_up_probability",
+            "risk_label",
+            "risk_positive_probability",
+            "risk_loss_gt_5pct",
+            "meroq_score",
+        ]
+        display_cols = [c for c in display_cols if c in ok_df.columns]
+
+        st.markdown("### Ranked scan")
+        st.dataframe(
+            ok_df.sort_values("meroq_score", ascending=False)[display_cols],
+            width="stretch",
+            hide_index=True,
+        )
+
+        left, right = st.columns(2)
+        with left:
+            st.plotly_chart(
+                px.bar(
+                    top_df.sort_values("meroq_score"),
+                    x="meroq_score",
+                    y="ticker",
+                    orientation="h",
+                    title="Top Meroq scores",
+                    range_x=[0, 100],
+                ),
+                width="stretch",
+                key="watchlist_score_bar_v90",
+            )
+        with right:
+            st.plotly_chart(
+                px.scatter(
+                    ok_df,
+                    x="risk_loss_gt_5pct",
+                    y="final_up_probability",
+                    size="meroq_score",
+                    hover_name="ticker",
+                    title="Probability vs. downside risk",
+                    labels={
+                        "risk_loss_gt_5pct": "P(loss > 5%)",
+                        "final_up_probability": "Final up probability",
+                    },
+                ),
+                width="stretch",
+                key="watchlist_risk_probability_scatter_v90",
+            )
+
+        st.markdown("### Quick read")
+        bullish = ok_df.sort_values("meroq_score", ascending=False).head(3)["ticker"].tolist()
+        cautious = ok_df.sort_values("risk_loss_gt_5pct", ascending=False).head(3)["ticker"].tolist()
+        uncertainty_order = (ok_df["final_up_probability"] - 0.5).abs().sort_values().index
+        uncertain = ok_df.loc[uncertainty_order].head(3)["ticker"].tolist()
+        st.write(f"**Highest-ranked:** {', '.join(bullish) if bullish else 'N/A'}")
+        st.write(f"**Highest downside-risk watch:** {', '.join(cautious) if cautious else 'N/A'}")
+        st.write(f"**Most uncertain:** {', '.join(uncertain) if uncertain else 'N/A'}")
+
+        failed_df = watchlist_df[watchlist_df["status"] != "ok"]
+        if not failed_df.empty:
+            with st.expander("Failed/skipped ticker details", expanded=False):
+                st.dataframe(failed_df, width="stretch", hide_index=True)
+
+
+def render_report_section(
+    ticker: str,
+    latest_close: float,
+    latest_date,
+    analysis_mode: str,
+    selected_model_label: str,
+    prediction: dict,
+    results: dict,
+    sentiment_fusion: dict | None,
+    sentiment_summary: dict | None,
+    risk_results: dict | None,
+    watchlist_df: pd.DataFrame | None,
+    simple_comparison: pd.DataFrame | None,
+    wf_results: dict | None,
+) -> None:
+    """Render an exportable run report."""
+    with report_placeholder.container():
+        st.subheader("Meroq insight report")
+        st.write(
+            "Generate a concise Markdown report from the current run. "
+            "Use it for notes, project documentation, or sharing analysis output."
+        )
+
+        report_markdown = build_insight_report(
+            ticker=ticker,
+            latest_close=latest_close,
+            latest_date=str(latest_date),
+            analysis_mode=analysis_mode,
+            selected_model_label=selected_model_label,
+            prediction=prediction,
+            model_metrics=results.get("metrics", {}),
+            sentiment_fusion=sentiment_fusion,
+            sentiment_summary=sentiment_summary,
+            risk_summary=risk_results.get("summary") if risk_results else None,
+            watchlist_df=watchlist_df,
+            model_comparison_df=simple_comparison,
+            walk_forward_results=wf_results,
+        )
+
+        col_a, col_b = st.columns([1, 2])
+        with col_a:
+            st.download_button(
+                "Download Markdown report",
+                data=report_markdown,
+                file_name=f"meroq_{ticker.upper()}_report.md",
+                mime="text/markdown",
+                key=f"download_report_{ticker}_{selected_model_label}",
+                width="stretch",
+            )
+        with col_b:
+            st.caption("The report includes the latest signal, sentiment overlay, risk simulation, watchlist highlights, and model comparison summary.")
+
+        with st.expander("Preview report", expanded=True):
+            st.markdown(report_markdown)
+
+        if watchlist_df is not None and not watchlist_df.empty:
+            csv_data = watchlist_df.to_csv(index=False)
+            st.download_button(
+                "Download watchlist scan CSV",
+                data=csv_data,
+                file_name="meroq_watchlist_scan.csv",
+                mime="text/csv",
+                key=f"download_watchlist_csv_{ticker}_{selected_model_label}",
+                width="stretch",
+            )
+
+
 def render_roadmap_section() -> None:
     with roadmap_placeholder.container():
         st.subheader("Production-minded upgrade path")
         st.markdown(
             """
-            **Current release: 0.8.2 — Product UX polish and safer defaults.**
+            **Current release: 1.0.0 — Watchlist intelligence and exportable insight reports.**
 
-            This release keeps the modeling stack intact while making the product easier to use:
+            This release adds a multi-ticker intelligence layer and a downloadable report workflow:
 
-            1. Collapses advanced settings into sidebar sections.
-            2. Uses XGBoost and fast settings as the default path.
-            3. Keeps the Prediction tab focused on the final signal and market snapshot.
-            4. Moves diagnostic charts and raw feature tables behind expanders.
-            5. Preserves sentiment modeling, risk simulation, model comparison, and walk-forward research tools.
+            1. Scans a configurable watchlist with a fast local model.
+            2. Combines model probability, recent-news sentiment, trend, and risk into a transparent Meroq Score.
+            3. Shows ranked candidates, high-risk names, and uncertain names.
+            4. Keeps advanced walk-forward and model-comparison tools optional so the app remains responsive.
 
             Next production-minded upgrades:
 
-            1. Run scheduled sentiment refreshes across the watchlist.
-            2. Add a watchlist dashboard with batch predictions.
-            3. Add model reports and exportable research summaries.
-            4. Add portfolio-level risk views.
-            5. Move from SQLite to PostgreSQL if deployment/data scale needs grow.
+            1. Exportable single-ticker and watchlist reports.
+            2. A cleaner landing page and public demo configuration.
+            3. Portfolio-level risk views.
+            4. Scheduled local refresh tasks for prices/news/sentiment.
+            5. PostgreSQL if deployment/data scale needs grow.
             """
         )
 
@@ -1164,6 +1385,10 @@ with summary_placeholder.container():
     st.info("Pipeline is running. Open **Run Details** to watch progress. Results tabs will populate as soon as their data is ready.")
 with prediction_placeholder.container():
     st.info("Waiting for latest prediction...")
+with watchlist_placeholder.container():
+    st.info("Waiting for watchlist scan settings...")
+with report_placeholder.container():
+    st.info("Report will be generated after the main analysis finishes.")
 with chart_placeholder.container():
     st.info("Waiting for price chart...")
 with risk_placeholder.container():
@@ -1404,6 +1629,52 @@ try:
         analysis_mode=analysis_mode,
     )
 
+    watchlist_df = pd.DataFrame()
+    watchlist_summary = {}
+    if run_watchlist_scan:
+        parsed_watchlist = [x.strip().upper() for x in watchlist_text.replace("\n", ",").split(",") if x.strip()]
+        parsed_watchlist = list(dict.fromkeys(parsed_watchlist))[: int(watchlist_max_tickers)]
+        update_run_monitor(
+            "Watchlist scan",
+            "running",
+            f"Scanning {len(parsed_watchlist)} tickers",
+            56,
+        )
+        watchlist_df = scan_watchlist(
+            tickers=parsed_watchlist,
+            period=period,
+            interval=interval,
+            news_source=selected_news_source,
+            sentiment_engine=selected_sentiment_engine,
+            max_news_items=min(int(max_news_items), 10),
+            days_back=int(news_lookback_days),
+            include_sentiment=bool(watchlist_include_sentiment and run_sentiment_analysis),
+            include_risk=bool(watchlist_include_risk and run_risk_simulation),
+            risk_horizon=min(int(simulation_horizon), 30),
+            risk_paths=min(int(simulation_paths), 500),
+            volatility_window=int(volatility_window),
+            drift_mode=drift_mode,
+            max_adjustment=float(sentiment_max_adjustment),
+            progress_callback=lambda payload: update_run_monitor(
+                "Watchlist scan",
+                "running" if payload.get("status") in {"running", "complete"} and int(payload.get("index", 0) or 0) < int(payload.get("total", 1) or 1) else payload.get("status", "running"),
+                f"{payload.get('ticker', 'ticker')} ({payload.get('index', 0)}/{payload.get('total', 0)}): {payload.get('detail', payload.get('status', ''))}",
+                56 + int(9 * (int(payload.get("index", 0) or 0) / max(1, int(payload.get("total", 1) or 1)))),
+            ),
+        )
+        watchlist_summary = summarize_watchlist_scan(watchlist_df)
+        update_run_monitor(
+            "Watchlist scan",
+            "complete",
+            f"Scanned {watchlist_summary.get('tickers_scanned', 0)} tickers",
+            65,
+            f"Watchlist scan complete: {watchlist_summary.get('bullish_count', 0)} bullish names and {watchlist_summary.get('high_risk_count', 0)} high-risk names.",
+        )
+    else:
+        update_run_monitor("Watchlist scan", "skipped", "Skipped in sidebar", 65)
+
+    render_watchlist_section(watchlist_df, watchlist_summary)
+
     update_run_monitor(
         "Model comparison",
         "running",
@@ -1520,12 +1791,29 @@ try:
 
     render_comparison_section(simple_comparison, wf_comparison, run_wf_model_comparison=run_wf_model_comparison, render_key="final")
 
+
+    render_report_section(
+        ticker=ticker,
+        latest_close=latest_close,
+        latest_date=latest_date,
+        analysis_mode=analysis_mode,
+        selected_model_label=selected_model_label,
+        prediction=prediction,
+        results=results,
+        sentiment_fusion=sentiment_fusion,
+        sentiment_summary=sentiment_summary,
+        risk_results=risk_results,
+        watchlist_df=watchlist_df,
+        simple_comparison=simple_comparison,
+        wf_results=wf_results,
+    )
+
     update_run_monitor(
         "Dashboard tabs",
         "complete",
         "All result sections are ready",
         100,
-        "Dashboard is ready: Prediction, Chart, Risk Simulation, News Sentiment, Sentiment Modeling, Sentiment-aware Signal, Backtest, Model Comparison, Model Details, Data Manager, and Roadmap sections are loaded.",
+        "Dashboard is ready: Prediction, Watchlist, Report, Chart, Risk Simulation, News Sentiment, Sentiment Modeling, Backtest, Model Comparison, Model Details, Data Manager, and Roadmap sections are loaded.",
     )
 
 except Exception as exc:
