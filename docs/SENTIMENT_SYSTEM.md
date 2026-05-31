@@ -45,3 +45,21 @@ The final output shows:
 - final sentiment-aware signal.
 
 This design is intentionally transparent and should not be confused with a fully historical sentiment-trained model.
+
+
+## Target-aware sentiment trust layer
+
+Meroq 1.9.0 adds a deterministic correction layer after the selected sentiment engine. The goal is to answer a product-specific question: is this headline positive, cautionary, neutral, irrelevant, or uncertain for the selected ticker/company?
+
+The layer adds these headline fields:
+
+- `target_sentiment_label`
+- `target_relevance_label`
+- `target_relevance_score`
+- `reason_tags`
+- `sentiment_explanation`
+- `base_sentiment_label` and `base_sentiment_score` for auditability
+
+Known failure mode fixed: generic sentiment can mark “3 Reasons PLAY is Risky and 1 Stock to Buy Instead” as positive because it sees “stock to buy.” Target-aware scoring recognizes that PLAY is the risky target and the buy recommendation is for another stock.
+
+Low-relevance and uncertain headlines are excluded from ticker-level sentiment aggregation when possible so broad or ambiguous headlines do not distort the overlay.

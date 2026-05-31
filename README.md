@@ -1,9 +1,9 @@
 # Meroq
 
-> Release 1.8.8 adds watchlist presets and ticker hygiene controls so large pasted lists can be cleaned, saved, reused, and scanned more safely.
+> Release 1.9.0 adds a target-aware sentiment trust layer so headlines are scored for the selected ticker/company, not as generic positive or negative language.
 
 
-Current release: 1.8.8 — Watchlist presets and ticker hygiene.
+Current release: 1.9.0 — Target-aware sentiment trust layer.
 
 Meroq is a local market-intelligence project for stock movement research. It combines price features, machine-learning signals, news sentiment, Monte Carlo risk simulation, watchlist scanning, portfolio exposure views, a Streamlit dashboard, a FastAPI backend, and a growing Next.js frontend.
 
@@ -11,9 +11,9 @@ Meroq is a local market-intelligence project for stock movement research. It com
 
 ## Current release
 
-**1.8.8 — Watchlist presets and ticker hygiene**
+**1.9.0 — Target-aware sentiment trust layer**
 
-The Next.js frontend now supports reusable watchlist presets, browser-local custom presets, input cleanup, duplicate detection, and scan-limit visibility before progressive scans begin. Streamlit remains the deepest research UI while the React/Next.js interface matures.
+Meroq now corrects generic headline sentiment with ticker-targeted relevance, reason tags, and explanations. Headlines such as “PLAY is risky and one stock to buy instead” are treated as cautionary for PLAY instead of positive because of the word “buy.”
 
 ## Main capabilities
 
@@ -21,7 +21,7 @@ The Next.js frontend now supports reusable watchlist presets, browser-local cust
 - Technical indicators and XGBoost-based directional modeling
 - Model comparison and walk-forward backtesting
 - Monte Carlo risk simulation
-- Company-aware news fetching and sentiment analysis
+- Company-aware news fetching and target-aware sentiment analysis
 - Sentiment-aware signal overlay
 - Watchlist intelligence with Meroq Score
 - Watchlist presets, input cleanup, and progressive scan controls

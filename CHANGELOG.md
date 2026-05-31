@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.9.0 — Target-aware sentiment trust layer
+
+### Added
+- Added a target-aware sentiment correction layer that scores whether a headline is positive or cautionary for the selected ticker/company.
+- Added headline-level relevance labels, target sentiment labels, reason tags, and plain-English sentiment explanations.
+- Added regression tests for the PLAY risky/buy-instead failure case and low-relevance ambiguous headlines.
+
+### Changed
+- Sentiment summaries now use a display label such as Cautionary when negative headlines are target-specific warnings.
+- Low-relevance and uncertain headlines are excluded from the ticker-level sentiment overlay when possible.
+- Frontend news cards now show relevance, target-aware sentiment, reason tags, and explanation text.
+- Bumped API metadata to 1.9.0 and frontend package version to 0.3.6.
+
+### Notes
+- This release does not add paid APIs or a slower LLM dependency. It improves trust with deterministic target-aware rules that run fast and remain testable.
+
 ## 1.8.8 — Watchlist presets and ticker hygiene
 
 ### Added
