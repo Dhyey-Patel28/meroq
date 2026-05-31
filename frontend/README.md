@@ -57,3 +57,14 @@ The ticker page now follows an evidence-first workflow:
 4. keep raw headline tables behind disclosure.
 
 Article links open in a new browser tab using `target="_blank"` and `rel="noopener noreferrer"`.
+
+## 1.8.2 forecast UX
+
+The ticker page now renders a forecast range from API `risk_percentiles` details:
+
+- current close reference line,
+- median simulated path,
+- 10th to 90th percentile range,
+- plain-English direction/evidence/risk panel.
+
+The chart is intentionally implemented as a lightweight SVG component before adding D3. This keeps the UI stable while the API data contract matures.

@@ -31,3 +31,9 @@ The current frontend can already call the FastAPI endpoints and display useful p
 - Add D3 only to the Next.js frontend.
 - Use D3 for custom interactions where normal tables/cards are insufficient.
 - Keep source links and accessibility labels in every interactive visualization.
+
+## Near-term rule
+
+Do not add D3 only for decoration. Add it when the frontend needs interactions that simple SVG cannot provide, such as brushing, linked tooltips, cross-filtering, or animated portfolio contribution views.
+
+Release 1.8.2 intentionally uses a lightweight SVG forecast band first. This validates the data contract before introducing a heavier visualization dependency.

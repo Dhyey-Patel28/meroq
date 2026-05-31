@@ -18,7 +18,7 @@ from src.portfolio import build_portfolio_view, parse_portfolio_weights, portfol
 from src.services import SingleTickerAnalysisRequest, run_single_ticker_analysis
 from src.watchlist import scan_watchlist, summarize_watchlist_scan
 
-APP_VERSION = "1.8.1"
+APP_VERSION = "1.8.2"
 
 
 class TickerAnalysisPayload(BaseModel):
@@ -217,6 +217,7 @@ def create_app() -> FastAPI:
                 "sentiment_summary": _sanitize(result.get("sentiment_summary", {})),
                 "sentiment_fusion": _sanitize(result.get("sentiment_fusion", {})),
                 "risk_summary": _sanitize((result.get("risk_results") or {}).get("summary", {})),
+                "risk_percentiles": _records((result.get("risk_results") or {}).get("percentiles", pd.DataFrame()), max_rows=payload.simulation_horizon),
                 "news_meta": _sanitize(result.get("news_meta", {})),
                 "news_headlines": _records(result.get("sentiment"), max_rows=payload.max_news_items),
             }

@@ -2,7 +2,9 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { DataTable } from "@/components/DataTable";
+import { DecisionPanel } from "@/components/DecisionPanel";
 import { ErrorBox, LoadingState } from "@/components/StateBlocks";
+import { ForecastBand } from "@/components/ForecastBand";
 import { MetricCard } from "@/components/MetricCard";
 import { NewsCard } from "@/components/NewsCard";
 import { PageShell } from "@/components/PageShell";
@@ -123,6 +125,7 @@ export default function TickerPage() {
   const summary = result?.summary;
   const details = result?.details;
   const riskSummary = details?.risk_summary;
+  const riskPercentiles = details?.risk_percentiles ?? [];
   const headlines = details?.news_headlines ?? [];
   const finalSignal = summary?.final_signal ?? summary?.base_signal ?? "N/A";
   const confidence = confidenceLabel(summary?.final_up_probability ?? summary?.base_up_probability);
@@ -220,6 +223,14 @@ export default function TickerPage() {
             <MetricCard label="Positive return probability" value={formatPct(riskSummary?.probability_positive_return)} />
             <MetricCard label="Loss > 5% probability" value={formatPct(riskSummary?.probability_loss_gt_5pct)} />
           </section>
+
+          <DecisionPanel summary={summary} riskSummary={riskSummary} />
+
+          <ForecastBand
+            currentPrice={summary.latest_close}
+            rows={riskPercentiles}
+            horizon={riskSummary?.horizon}
+          />
 
           <TrustPanel />
 

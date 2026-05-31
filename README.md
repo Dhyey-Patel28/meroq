@@ -1,12 +1,17 @@
 # Meroq
 
+> Release 1.8.3 restores repository hygiene files that must remain tracked, including `.gitignore`, `.gitattributes`, CI workflow configuration, and `data/.gitkeep`, while preserving the 1.8.2 frontend forecast UX.
+
+
+Current release: 1.8.3 — Frontend dependency and repo hygiene recovery.
+
 Meroq is a local market-intelligence project for stock movement research. It combines price features, machine-learning signals, news sentiment, Monte Carlo risk simulation, watchlist scanning, portfolio exposure views, a Streamlit dashboard, a FastAPI backend, and a growing Next.js frontend.
 
 > Educational/research use only. Meroq is not financial advice and should not be treated as an automated trading system.
 
 ## Current release
 
-**1.8.1 — Human-centered frontend and source-linked news**
+**1.8.3 — Frontend forecast UX and dependency hardening**
 
 The Next.js frontend now calls the local FastAPI backend for ticker analysis, watchlist scans, and portfolio views. Streamlit remains the most complete UI while the React/Next.js interface matures.
 
@@ -170,3 +175,11 @@ These are ignored by `.gitignore`.
 - Frontend ticker analysis now shows source-linked headline cards.
 - News links open in a new tab so users can inspect the original source.
 - The frontend copy is more human-centered: signal first, evidence second, raw tables behind disclosure.
+
+## 1.8.3 frontend update
+
+- The Next.js ticker page now includes a forecast-range visualization: current close, median simulated path, and 10th/90th percentile range.
+- The ticker page now has a clearer decision panel: direction, evidence, and risk are summarized before raw tables.
+- The FastAPI detail response now returns risk percentile rows when `return_details=true`, so the frontend can draw a user-facing forecast range.
+- The frontend package pins PostCSS through npm `overrides` to avoid the current audit warning without downgrading Next.js.
+- D3 remains on the roadmap; this release uses a lightweight accessible SVG component first so the data contract can stabilize.

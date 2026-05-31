@@ -71,3 +71,15 @@ Recommended next frontend work:
 - Data tables render URL fields as links instead of raw text.
 - The frontend copy now follows a conclusion → evidence → source inspection flow.
 - D3.js is planned separately in `docs/D3_VISUALIZATION_ROADMAP.md`.
+
+## Forecast-first ticker page
+
+The frontend ticker workflow should show a human-readable answer before implementation detail:
+
+1. signal and final probability,
+2. decision read: direction, evidence, risk,
+3. forecast range from Monte Carlo percentiles,
+4. source-linked headlines,
+5. raw headline tables only after disclosure.
+
+The forecast chart uses risk percentile data returned by the FastAPI endpoint when `return_details=true`.

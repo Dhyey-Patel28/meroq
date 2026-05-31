@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.8.3 — Repo Hygiene Recovery
+
+- Restored `.gitignore`, `.gitattributes`, `.github/workflows/ci.yml`, and `data/.gitkeep` to the release package.
+- Kept the 1.8.2 frontend forecast range UX and PostCSS dependency override.
+- Added generated frontend build metadata (`frontend/tsconfig.tsbuildinfo`) to `.gitignore`.
+- Ensured release packages do not require committing `.env`, `.venv`, SQLite databases, `.next`, `node_modules`, or cache files.
+
+
+## 1.8.2 — Frontend forecast UX and dependency hardening
+
+### Added
+- Added a forecast-range visualization to the Next.js ticker page using the risk simulation percentiles returned by the API.
+- Added a decision panel that summarizes direction, evidence, and risk in plain language before raw tables.
+- Added `risk_percentiles` to the ticker analysis API details response.
+
+### Changed
+- Bumped API metadata to 1.8.2 and frontend package version to 0.3.1.
+- Kept D3.js as a documented future visualization track; the current chart uses a lightweight accessible SVG component.
+- Kept the PostCSS npm override in the frontend package to avoid the audit issue without using `npm audit fix --force`.
+
+### Notes
+- This release improves the frontend product experience without replacing the Streamlit research dashboard.
+
 ## 1.8.1 — Human-centered frontend and source-linked news
 
 ### Added

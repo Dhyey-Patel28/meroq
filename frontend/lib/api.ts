@@ -37,6 +37,7 @@ export type TickerAnalysisResponse = {
     sentiment_summary?: ApiRecord;
     sentiment_fusion?: ApiRecord;
     risk_summary?: ApiRecord;
+    risk_percentiles?: ApiRecord[];
     news_meta?: ApiRecord;
     news_headlines?: ApiRecord[];
   };

@@ -88,3 +88,13 @@ npm run dev
 ```
 
 The API CORS defaults already allow `http://localhost:3000` and `http://127.0.0.1:3000`.
+
+## Ticker details: forecast percentiles
+
+When `return_details=true`, `POST /analysis/ticker` includes `details.risk_percentiles` if risk simulation is enabled. The frontend uses these rows to render the forecast range:
+
+- `p10`: downside range,
+- `p50`: median path,
+- `p90`: upside range.
+
+This is a visualization aid, not a guaranteed price forecast.
