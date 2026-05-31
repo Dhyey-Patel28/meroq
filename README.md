@@ -1,9 +1,9 @@
 # Meroq
 
-> Release 1.8.5 adds progressive watchlist scanning in the Next.js frontend so rows appear as each ticker finishes, failed symbols are shown and skipped, and large scans are capped intentionally.
+> Release 1.8.6 adds progressive watchlist loading, searchable tables, drill-down ticker modals, portfolio donut charts, and route-reset behavior while keeping the earlier forecast and trust UX intact.
 
 
-Current release: 1.8.5 — Progressive watchlist scanning and branch workflow.
+Current release: 1.8.6 — Progressive watchlist UX and portfolio drill-down.
 
 Meroq is a local market-intelligence project for stock movement research. It combines price features, machine-learning signals, news sentiment, Monte Carlo risk simulation, watchlist scanning, portfolio exposure views, a Streamlit dashboard, a FastAPI backend, and a growing Next.js frontend.
 
@@ -11,9 +11,9 @@ Meroq is a local market-intelligence project for stock movement research. It com
 
 ## Current release
 
-**1.8.5 — Progressive watchlist scanning and branch workflow**
+**1.8.6 — Progressive watchlist UX and portfolio drill-down**
 
-The Next.js frontend now calls the local FastAPI backend for ticker analysis, watchlist scans, and portfolio views. Streamlit remains the most complete UI while the React/Next.js interface matures.
+The Next.js frontend now renders watchlist rows progressively, provides searchable tables and click-through ticker detail modals, and visualizes portfolio weights with donut charts. Streamlit remains the deepest research UI while the React/Next.js interface matures.
 
 ## Main capabilities
 
@@ -24,7 +24,6 @@ The Next.js frontend now calls the local FastAPI backend for ticker analysis, wa
 - Company-aware news fetching and sentiment analysis
 - Sentiment-aware signal overlay
 - Watchlist intelligence with Meroq Score
-- Progressive watchlist scanning with failed ticker visibility
 - Portfolio risk and exposure view
 - Markdown/CSV reporting
 - FastAPI backend for reusable analysis endpoints
@@ -185,7 +184,3 @@ These are ignored by `.gitignore`.
 - CSS alignment values were updated for better browser compatibility and to remove the Autoprefixer warning.
 - The frontend package keeps the PostCSS npm override to avoid the audit issue without downgrading Next.js.
 - D3 remains on the roadmap; this release keeps the chart lightweight while the API contract stabilizes.
-
-## Development workflow
-
-Use feature branches and pull requests for future upgrades. See `docs/BRANCHING_WORKFLOW.md` for the recommended GitHub CLI flow and optional `scripts/ship_pr.ps1` helper.
