@@ -7,6 +7,7 @@ import pandas as pd
 
 from src.data_loader import fetch_price_data
 from src.features import add_technical_features, build_model_frame
+from src.grades import build_grade_bundle
 from src.model import predict_latest, train_classifier
 from src.news_sentiment import analyze_news_sentiment, fetch_news_for_ticker, summarize_sentiment
 from src.risk_simulation import risk_label, simulate_price_paths
@@ -162,6 +163,20 @@ def scan_single_ticker(
         rsi_14=rsi_14,
         close_sma20_ratio=close_sma20_ratio,
     )
+    metrics = results["metrics"]
+    grades = build_grade_bundle(
+        meroq_score=score,
+        final_up_probability=final_probability,
+        sentiment_score=sentiment_score,
+        headline_count=sentiment_summary.get("headline_count", 0),
+        risk_loss_gt_5pct=risk_loss,
+        risk_positive_probability=risk_positive,
+        close_sma20_ratio=close_sma20_ratio,
+        rsi_14=rsi_14,
+        model_roc_auc=metrics.get("roc_auc"),
+        model_accuracy=metrics.get("accuracy"),
+        status="ok",
+    )
 
     return {
         "ticker": symbol,
@@ -184,8 +199,9 @@ def scan_single_ticker(
         "risk_loss_gt_5pct": risk_loss,
         "risk_median_return": float(risk_summary.get("median_return", np.nan)) if risk_summary else np.nan,
         "meroq_score": score,
-        "model_accuracy": float(results["metrics"].get("accuracy", np.nan)),
-        "model_roc_auc": float(results["metrics"].get("roc_auc", np.nan)) if pd.notna(results["metrics"].get("roc_auc")) else np.nan,
+        **grades,
+        "model_accuracy": float(metrics.get("accuracy", np.nan)),
+        "model_roc_auc": float(metrics.get("roc_auc", np.nan)) if pd.notna(metrics.get("roc_auc")) else np.nan,
     }
 
 

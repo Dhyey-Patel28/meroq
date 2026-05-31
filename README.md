@@ -1,9 +1,9 @@
 # Meroq
 
-> Release 1.9.0 adds a target-aware sentiment trust layer so headlines are scored for the selected ticker/company, not as generic positive or negative language.
+> Release 1.9.1 adds Meroq Grades: local A-F research labels with component grades for momentum, risk, sentiment, model confidence, and data quality.
 
 
-Current release: 1.9.0 — Target-aware sentiment trust layer.
+Current release: 1.9.1 — Meroq Grades and component ratings.
 
 Meroq is a local market-intelligence project for stock movement research. It combines price features, machine-learning signals, news sentiment, Monte Carlo risk simulation, watchlist scanning, portfolio exposure views, a Streamlit dashboard, a FastAPI backend, and a growing Next.js frontend.
 
@@ -11,9 +11,9 @@ Meroq is a local market-intelligence project for stock movement research. It com
 
 ## Current release
 
-**1.9.0 — Target-aware sentiment trust layer**
+**1.9.1 — Meroq Grades and component ratings**
 
-Meroq now corrects generic headline sentiment with ticker-targeted relevance, reason tags, and explanations. Headlines such as “PLAY is risky and one stock to buy instead” are treated as cautionary for PLAY instead of positive because of the word “buy.”
+Meroq now adds local A-F research grades on top of score, signal, risk, sentiment, and model confidence. Grades are designed as attention labels, not buy/sell recommendations.
 
 ## Main capabilities
 
@@ -23,6 +23,7 @@ Meroq now corrects generic headline sentiment with ticker-targeted relevance, re
 - Monte Carlo risk simulation
 - Company-aware news fetching and target-aware sentiment analysis
 - Sentiment-aware signal overlay
+- Meroq Grade and component rating labels
 - Watchlist intelligence with Meroq Score
 - Watchlist presets, input cleanup, and progressive scan controls
 - Portfolio risk and exposure view

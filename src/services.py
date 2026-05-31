@@ -8,6 +8,8 @@ import pandas as pd
 
 from src.data_loader import fetch_price_data
 from src.features import add_technical_features, build_model_frame
+from src.grades import build_grade_bundle
+from src.watchlist import compute_meroq_score
 from src.model import MODEL_LABELS, predict_latest, train_classifier
 from src.news_sentiment import analyze_news_sentiment, fetch_news_for_ticker, summarize_sentiment
 from src.risk_simulation import risk_label, simulate_price_paths
@@ -69,6 +71,15 @@ class SingleTickerAnalysisSummary:
     risk_label: str | None
     risk_probability_positive_return: float | None
     risk_probability_loss_gt_5pct: float | None
+    meroq_score: float
+    meroq_grade: str
+    meroq_grade_label: str
+    momentum_grade: str
+    risk_grade: str
+    sentiment_grade: str
+    model_confidence_grade: str
+    data_quality_grade: str
+    grade_summary: str
     simple_split_accuracy: float
     simple_split_f1: float
     simple_split_roc_auc: float | None
@@ -170,6 +181,35 @@ def run_single_ticker_analysis(request: SingleTickerAnalysisRequest) -> dict[str
         sentiment_adjustment = float(sentiment_fusion["adjustment_pct_points"])
 
     metrics = model_result["metrics"]
+    latest_return_1d = _metric_or_none(latest_row.to_dict(), "return_1d")
+    latest_rsi_14 = _metric_or_none(latest_row.to_dict(), "rsi_14")
+    latest_close_sma20_ratio = _metric_or_none(latest_row.to_dict(), "close_sma20_ratio")
+    risk_summary = (risk_results or {}).get("summary", {})
+    risk_positive = _metric_or_none(risk_summary, "probability_positive_return")
+    risk_loss = _metric_or_none(risk_summary, "probability_loss_gt_5pct")
+    sentiment_score = _metric_or_none(sentiment_summary or {}, "average_score") if sentiment_summary else 0.0
+    headline_count = int((sentiment_summary or {}).get("headline_count", 0) if sentiment_summary else 0)
+    meroq_score = compute_meroq_score(
+        final_up_probability=final_up_probability,
+        sentiment_score=sentiment_score or 0.0,
+        risk_positive_probability=risk_positive,
+        risk_loss_gt_5pct=risk_loss,
+        rsi_14=latest_rsi_14,
+        close_sma20_ratio=latest_close_sma20_ratio,
+    )
+    grade_bundle = build_grade_bundle(
+        meroq_score=meroq_score,
+        final_up_probability=final_up_probability,
+        sentiment_score=sentiment_score,
+        headline_count=headline_count,
+        risk_loss_gt_5pct=risk_loss,
+        risk_positive_probability=risk_positive,
+        close_sma20_ratio=latest_close_sma20_ratio,
+        rsi_14=latest_rsi_14,
+        model_roc_auc=metrics.get("roc_auc"),
+        model_accuracy=metrics.get("accuracy"),
+        status="ok",
+    )
     summary = SingleTickerAnalysisSummary(
         ticker=ticker,
         generated_at_utc=datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -186,8 +226,17 @@ def run_single_ticker_analysis(request: SingleTickerAnalysisRequest) -> dict[str
         news_sentiment_score=_metric_or_none(sentiment_summary or {}, "average_score") if sentiment_summary else None,
         headlines_analyzed=int((sentiment_summary or {}).get("headline_count", 0) if sentiment_summary else 0),
         risk_label=risk_name,
-        risk_probability_positive_return=_metric_or_none((risk_results or {}).get("summary", {}), "probability_positive_return"),
-        risk_probability_loss_gt_5pct=_metric_or_none((risk_results or {}).get("summary", {}), "probability_loss_gt_5pct"),
+        risk_probability_positive_return=risk_positive,
+        risk_probability_loss_gt_5pct=risk_loss,
+        meroq_score=meroq_score,
+        meroq_grade=str(grade_bundle["meroq_grade"]),
+        meroq_grade_label=str(grade_bundle["meroq_grade_label"]),
+        momentum_grade=str(grade_bundle["momentum_grade"]),
+        risk_grade=str(grade_bundle["risk_grade"]),
+        sentiment_grade=str(grade_bundle["sentiment_grade"]),
+        model_confidence_grade=str(grade_bundle["model_confidence_grade"]),
+        data_quality_grade=str(grade_bundle["data_quality_grade"]),
+        grade_summary=str(grade_bundle["grade_summary"]),
         simple_split_accuracy=float(metrics["accuracy"]),
         simple_split_f1=float(metrics["f1"]),
         simple_split_roc_auc=_metric_or_none(metrics, "roc_auc"),

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
+import { GradeBadge } from "@/components/GradeBadge";
 import { InfoTip } from "@/components/InfoTip";
 import { StatusPill } from "@/components/StatusPill";
 import { type ApiRecord, formatNumber, formatPct } from "@/lib/api";
@@ -54,7 +55,15 @@ function formatCell(value: ApiRecord[keyof ApiRecord], column: string) {
   return String(value);
 }
 
-function renderDecoratedCell(column: string, value: ApiRecord[keyof ApiRecord]) {
+function renderDecoratedCell(column: string, value: ApiRecord[keyof ApiRecord], row?: ApiRecord) {
+  if (column === "meroq_grade") {
+    return <GradeBadge grade={value} label={row?.meroq_grade_label} compact />;
+  }
+
+  if (["momentum_grade", "risk_grade", "sentiment_grade", "model_confidence_grade", "data_quality_grade"].includes(column)) {
+    return <GradeBadge grade={value} compact />;
+  }
+
   if (column === "status") {
     const text = String(value ?? "Unknown");
     const label = text === "ok" ? "Ready" : text === "failed" ? "Issue" : text;
@@ -244,7 +253,7 @@ export function DataTable({
                 }
               >
                 {tableColumns.map((column) => (
-                  <td key={column}>{renderDecoratedCell(column, row[column])}</td>
+                  <td key={column}>{renderDecoratedCell(column, row[column], row)}</td>
                 ))}
               </tr>
             ))}

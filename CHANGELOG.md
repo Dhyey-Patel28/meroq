@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.1 — Meroq Grades and component ratings
+
+### Added
+- Added a local Meroq Grade layer that converts Meroq Score into A-F research grades.
+- Added component grades for momentum, risk, sentiment, model confidence, and data quality.
+- Added grade badges to ticker, watchlist, portfolio, and ticker drill-down views.
+- Added portfolio-grade summary fields and grade-aware portfolio holdings.
+- Added regression tests for grade thresholds and cautionary grade summaries.
+
+### Notes
+- Grades are attention labels for research workflow. They are not buy/sell recommendations and do not require paid API data.
+
 ## 1.9.0 — Target-aware sentiment trust layer
 
 ### Added
