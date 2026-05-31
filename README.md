@@ -1,20 +1,23 @@
 # Meroq
 
+[![CI](https://github.com/Dhyey-Patel28/meroq/actions/workflows/ci.yml/badge.svg)](https://github.com/Dhyey-Patel28/meroq/actions/workflows/ci.yml)
+
 **Meroq** is a local-first market intelligence dashboard for stock movement analysis, model comparison, walk-forward backtesting, Monte Carlo risk simulation, and recent-news sentiment analysis.
 
 It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**Release 1.5.1 — API QA patch**
+**Release 1.6.0 — GitHub Actions CI**
 
-This patch stabilizes the API test suite introduced in 1.5.0:
+This release adds automated CI so the lightweight regression suite runs on every push and pull request to `main`:
 
-- Aligns portfolio summary keys across `src/portfolio.py`, the FastAPI endpoint, and the pytest suite.
-- Keeps backward-compatible portfolio aliases for existing UI/report code.
-- Confirms the automated tests can be used as a real regression gate before future API/frontend work.
+- Adds `.github/workflows/ci.yml` for GitHub Actions.
+- Runs `python scripts/run_tests.py` in CI.
+- Keeps API keys and live market/news calls out of the automated test path.
+- Documents local testing, CI behavior, and secrets rules.
 
-The Streamlit app remains the main product UI. The API is a migration bridge for a future Next.js or React frontend.
+The Streamlit app remains the main product UI. The FastAPI service layer is the bridge for a future Next.js or React frontend.
 
 ## Core capabilities
 
@@ -72,6 +75,7 @@ Read:
 - `docs/FRONTEND_MIGRATION.md` for the Streamlit-to-FastAPI/Next.js migration plan
 - `docs/PORTFOLIO_RISK.md` for the portfolio exposure view
 - `docs/QA_AUDIT.md` for senior QA findings and fixes
+- `docs/CI.md` for GitHub Actions CI behavior and local test commands
 
 ## Optional API keys
 

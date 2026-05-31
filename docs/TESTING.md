@@ -45,3 +45,14 @@ python -m streamlit run app.py
 ```
 
 Also confirm `.env` is not staged before committing.
+
+## GitHub Actions CI
+
+Meroq includes a GitHub Actions workflow at `.github/workflows/ci.yml`. It runs the same lightweight pytest suite used locally:
+
+```bash
+python scripts/run_tests.py
+```
+
+The CI workflow does not require API keys and does not call external market/news providers. Live-data paths should be checked with smoke scripts when needed.
+

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.0 — GitHub Actions CI
+
+### Added
+
+- Added `.github/workflows/ci.yml` to run the lightweight pytest suite on pushes and pull requests to `main`.
+- Added `docs/CI.md` to document the CI workflow, local equivalent commands, and secrets policy.
+
+### Changed
+
+- Updated testing documentation to distinguish deterministic CI tests from live-data smoke checks.
+- Updated README to show the CI status badge and current release.
+
 ## 1.5.1 — API QA patch
 
 ### Fixed
