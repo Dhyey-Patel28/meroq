@@ -1,23 +1,30 @@
 # Human-Centered UX Principles
 
-Meroq is a research tool, but the primary interface should behave like a product. The user should not need to understand model internals before reading the output.
+Meroq should not feel like a model dump. It should help a user answer a clear question:
+
+> What is the current read, how much should I trust it, and what evidence can I inspect?
 
 ## Product rules
 
-1. **Conclusion first**: start with current price, forecast range, signal, and confidence. Keep diagnostics behind advanced sections.
-2. **Trust before intensity**: every prediction should expose why confidence is low, moderate, or higher.
-3. **Original sources matter**: news sentiment is only useful when the user can inspect the source article.
-4. **Progressive disclosure**: show simple summaries by default and keep formulas, raw tables, and internals in detail views.
-5. **No black boxes**: if sentiment changes the signal, show the adjustment; if a provider falls back, say so plainly.
+1. **Conclusion first**
+   - Show the signal, probability, confidence, and risk lens before technical artifacts.
 
-## UX priorities
+2. **Evidence second**
+   - News sentiment must show source links so a user can open the original article.
 
-- First screen: readable in under 10 seconds.
-- Prediction page: answer “what is the current outlook?”
-- News page: answer “what sources influenced this sentiment?”
-- Watchlist page: answer “what should I inspect next?”
-- Portfolio page: answer “where is the risk concentrated?”
+3. **Advanced details are optional**
+   - Tables, raw feature values, diagnostics, and model internals belong behind disclosure.
 
-## Future direction
+4. **Plain-English labels**
+   - Use phrases such as "balanced", "constructive", "high downside risk", and "source-backed sentiment".
+   - Keep numeric values visible, but pair them with interpretation.
 
-A dedicated frontend can use richer interactions, including a D3-based visual layer, after the API contract stabilizes.
+5. **Do not overstate certainty**
+   - Meroq is a research system. Forecasts and sentiment are directional lenses, not instructions.
+
+## Current 1.8.1 implementation
+
+- Frontend ticker analysis shows a clear signal and plain-English read.
+- Recent headlines are rendered as article cards with source links.
+- URL fields in tables are clickable.
+- The dashboard explains the local FastAPI + Next.js workflow without sounding like an internal scaffold.

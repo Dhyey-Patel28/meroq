@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-import html
 import json
 
 import pandas as pd
@@ -1000,73 +999,6 @@ def render_risk_simulation_section(risk_results: dict | None, ticker: str, inter
 
 
 
-
-
-
-def _valid_article_url(value: object) -> str:
-    """Return safe http(s) URLs for source links, otherwise an empty string."""
-    url = str(value or "").strip()
-    if url.lower().startswith(("http://", "https://")):
-        return url
-    return ""
-
-
-def _headline_display_frame(sentiment_df: pd.DataFrame, max_rows: int = 20) -> pd.DataFrame:
-    """Create a human-readable headline table with source links."""
-    if sentiment_df is None or sentiment_df.empty:
-        return pd.DataFrame()
-    cols = [
-        "published_at",
-        "publisher",
-        "source",
-        "title",
-        "sentiment_label",
-        "sentiment_score",
-        "confidence",
-        "url",
-    ]
-    existing = [col for col in cols if col in sentiment_df.columns]
-    frame = sentiment_df[existing].copy().head(max_rows)
-    if "url" in frame.columns:
-        frame["url"] = frame["url"].map(_valid_article_url)
-    return frame
-
-
-def _render_headline_cards(sentiment_df: pd.DataFrame, max_cards: int = 5) -> None:
-    """Show the most relevant news items as readable cards with external links."""
-    if sentiment_df is None or sentiment_df.empty:
-        st.info("No headline details were returned.")
-        return
-
-    st.markdown("#### Source articles")
-    st.caption("Open the original source to inspect context before trusting any sentiment label.")
-    rows = sentiment_df.head(max_cards).to_dict(orient="records")
-    for row in rows:
-        title = html.escape(str(row.get("title") or "Untitled headline"))
-        publisher = html.escape(str(row.get("publisher") or row.get("source") or "News source"))
-        label = html.escape(str(row.get("sentiment_label") or "Unscored"))
-        score = row.get("sentiment_score")
-        confidence = row.get("confidence")
-        score_text = ""
-        try:
-            score_text = f"Score {float(score):+.2f}"
-        except Exception:
-            pass
-        confidence_text = ""
-        try:
-            confidence_text = f" · Confidence {float(confidence):.1%}"
-        except Exception:
-            pass
-        url = _valid_article_url(row.get("url"))
-
-        with st.container(border=True):
-            st.markdown(f"**{title}**")
-            st.caption(f"{publisher} · {label} {score_text}{confidence_text}")
-            if url:
-                st.link_button("Open source article ↗", url)
-            else:
-                st.caption("No source link was returned for this item.")
-
 def render_sentiment_section(
     sentiment_df: pd.DataFrame | None,
     sentiment_summary: dict | None,
@@ -1124,7 +1056,6 @@ def render_sentiment_section(
             return
 
         st.info(sentiment_context_sentence(sentiment_summary))
-        _render_headline_cards(sentiment_df, max_cards=6)
 
         a, b, c, d = st.columns(4)
         a.metric("Overall sentiment", sentiment_summary["overall_label"], f"{sentiment_summary['average_score']:+.2f}")
@@ -1158,6 +1089,44 @@ def render_sentiment_section(
             width="stretch",
             key=f"sentiment_scores_{ticker}_{sentiment_summary['headline_count']}_{sentiment_summary.get('engine')}_{source_used}",
         )
+
+        with st.expander("Source articles", expanded=True):
+            st.caption("Open the original articles before relying on the sentiment score. Links open outside Meroq.")
+            article_cols = [
+                "published_at",
+                "publisher",
+                "source",
+                "sentiment_label",
+                "sentiment_score",
+                "confidence",
+                "title",
+                "url",
+            ]
+            article_rows = sentiment_df[[col for col in article_cols if col in sentiment_df.columns]].head(8)
+            if article_rows.empty:
+                st.info("No source articles were returned.")
+            else:
+                for idx, row in article_rows.iterrows():
+                    title = str(row.get("title", "Untitled headline"))
+                    publisher = str(row.get("publisher", row.get("source", "News source")))
+                    label = str(row.get("sentiment_label", "Unscored"))
+                    score = row.get("sentiment_score", None)
+                    confidence = row.get("confidence", None)
+                    url = str(row.get("url", "") or "").strip()
+                    meta = f"{publisher} · {label}"
+                    try:
+                        meta += f" · score {float(score):+.2f}"
+                    except Exception:
+                        pass
+                    try:
+                        meta += f" · confidence {float(confidence):.0%}"
+                    except Exception:
+                        pass
+                    st.markdown(f"**{title}**")
+                    st.caption(meta)
+                    if url.startswith(("http://", "https://")):
+                        st.link_button("Open source article ↗", url)
+                    st.divider()
 
         show_cols = [
             "published_at",
@@ -1194,23 +1163,7 @@ def render_sentiment_section(
                 st.caption("These aggregated daily fields are the basis for the next modeling step: joining sentiment to OHLCV rows.")
 
         with st.expander("Headline-level sentiment table", expanded=False):
-            headline_frame = _headline_display_frame(sentiment_df, max_rows=50)
-            if headline_frame.empty:
-                st.info("No headline rows are available.")
-            else:
-                column_config = {}
-                if "url" in headline_frame.columns:
-                    column_config["url"] = st.column_config.LinkColumn(
-                        "Source link",
-                        display_text="Open article ↗",
-                        help="Open the original publisher page in a new browser tab.",
-                    )
-                st.dataframe(
-                    headline_frame,
-                    width="stretch",
-                    hide_index=True,
-                    column_config=column_config,
-                )
+            st.dataframe(sentiment_df[existing_cols], width="stretch", hide_index=True)
 
         st.caption(
             "Safety: no paid inference API is used. Optional Finnhub/NewsAPI keys are free-plan inputs only, read from local `.env`, and never committed."

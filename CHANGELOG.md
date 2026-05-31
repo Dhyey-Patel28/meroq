@@ -1,19 +1,77 @@
 # Changelog
 
-## 1.7.0 — Human-centered news and trust UX
+## 1.8.1 — Human-centered frontend and source-linked news
+
+### Added
+- Added source-linked news cards to the Next.js ticker page.
+- Added `NewsCard` and `TrustPanel` frontend components.
+- Added clickable URL rendering to the frontend data table.
+- Added human-centered UX documentation and a D3 visualization roadmap.
+
+### Changed
+- Reworked the frontend dashboard and ticker page copy to focus on user decisions, evidence, and source inspection.
+- Updated the Streamlit News Sentiment section with source article links.
+- Updated API metadata to 1.8.1 and frontend package version to 0.3.0.
+
+### Notes
+- D3.js is documented as a future visualization track. It is not added as a runtime dependency yet, so this release remains lightweight.
+
+## 1.8.0 — Frontend product client
 
 ### Added
 
-- Added source article cards to the News Sentiment tab.
-- Added clickable source links for headline-level sentiment rows.
-- Added `docs/HCD_UX_PRINCIPLES.md` to define how Meroq should communicate conclusions, confidence, and risk.
-- Added `docs/D3_VISUALIZATION_ROADMAP.md` for future interactive visualization work.
+- Upgraded the Next.js frontend from scaffold copy to functional product pages.
+- Added API-backed ticker analysis, watchlist scan, and portfolio workflows in the frontend.
+- Added frontend loading, error, probability, status, and metric components for a cleaner user experience.
+- Added a frontend dashboard that explains the Streamlit/FastAPI/Next.js split.
 
 ### Changed
 
-- Improved news sentiment presentation so users can inspect source articles before trusting the sentiment label.
-- Updated API tests to use `httpx.ASGITransport` and `httpx.AsyncClient` instead of the deprecated FastAPI/Starlette `TestClient` path.
-- Updated API metadata to 1.7.0.
+- Moved the frontend from a local `frontend.zip` artifact into a normal tracked `frontend/` directory.
+- Removed generated frontend build output from the release package.
+- Bumped FastAPI metadata version to 1.8.0.
+- Updated frontend docs to describe the API-connected client.
+
+### Notes
+
+- Streamlit remains the complete primary UI.
+- The Next.js app is now useful for local API testing and future UI migration work, but it is still not the full replacement for Streamlit.
+
+## 1.7.0 — Frontend migration scaffold
+
+### Added
+
+- Added a separate `frontend/` Next.js + TypeScript scaffold.
+- Added frontend pages for dashboard, ticker analysis, watchlist scan, and portfolio view.
+- Added a typed frontend API client in `frontend/lib/api.ts`.
+- Added reusable frontend components for metric cards, layout, backend status, and data tables.
+- Added `docs/FRONTEND_SCAFFOLD.md` to document local frontend setup.
+
+### Changed
+
+- Bumped FastAPI metadata version to 1.7.0.
+- Updated frontend migration documentation to reflect the new scaffold.
+- Added frontend build artifacts and local env files to `.gitignore`.
+
+### Notes
+
+- Streamlit remains the primary UI.
+- The Next.js app is an API-boundary proof of concept, not a full replacement yet.
+- Frontend dependencies are managed inside `frontend/package.json`, separate from Python `requirements.txt`.
+
+## 1.6.1 — API test-client cleanup
+
+### Fixed
+
+- Replaced `fastapi.testclient.TestClient` in API tests with direct `httpx.ASGITransport` and `httpx.AsyncClient` calls.
+- Removed the Starlette/FastAPI TestClient deprecation warning without suppressing it.
+- Kept API tests deterministic and local; no live market/news providers are called by the default test suite.
+
+### Notes
+
+- This change only affects tests. It does not change the Streamlit app, FastAPI endpoints, model logic, or local data layer.
+- If the API later adds startup/shutdown lifespan behavior, tests may need a lifespan manager around the ASGI transport.
+
 
 ## 1.6.0 — GitHub Actions CI
 
