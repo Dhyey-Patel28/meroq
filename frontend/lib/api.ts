@@ -57,20 +57,17 @@ export type WatchlistPayload = {
   days_back?: number;
 };
 
+export type WatchlistSinglePayload = Omit<WatchlistPayload, "tickers"> & {
+  ticker: string;
+};
+
 export type PortfolioPayload = WatchlistPayload & {
   weights?: string;
 };
 
-export type WatchlistTickerPayload = Omit<WatchlistPayload, "tickers"> & {
-  ticker: string;
-};
-
-export type WatchlistTickerResponse = {
-  row: ApiRecord;
-};
-
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
+    cache: "no-store",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -107,16 +104,15 @@ export function analyzeTicker(payload: TickerAnalysisPayload) {
   });
 }
 
-export function scanWatchlistTicker(payload: WatchlistTickerPayload, signal?: AbortSignal) {
-  return apiFetch<WatchlistTickerResponse>("/watchlist/scan-one", {
+export function scanWatchlist(payload: WatchlistPayload) {
+  return apiFetch<{ summary: ApiRecord; rows: ApiRecord[] }>("/watchlist/scan", {
     method: "POST",
     body: JSON.stringify(payload),
-    signal,
   });
 }
 
-export function scanWatchlist(payload: WatchlistPayload) {
-  return apiFetch<{ summary: ApiRecord; rows: ApiRecord[] }>("/watchlist/scan", {
+export function scanWatchlistOne(payload: WatchlistSinglePayload) {
+  return apiFetch<{ row: ApiRecord }>("/watchlist/scan-one", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -133,16 +129,10 @@ export function analyzePortfolio(payload: PortfolioPayload) {
 }
 
 export function parseTickerList(value: string): string[] {
-  const seen = new Set<string>();
   return value
     .split(/[\n,]+/)
     .map((item) => item.trim().toUpperCase())
-    .filter(Boolean)
-    .filter((item) => {
-      if (seen.has(item)) return false;
-      seen.add(item);
-      return true;
-    });
+    .filter(Boolean);
 }
 
 export function formatPct(value: unknown, decimals = 1) {

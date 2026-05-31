@@ -1,22 +1,21 @@
 # Changelog
 
-## 1.8.5 — Progressive watchlist scanning and branch workflow
+## 1.8.6 — Progressive watchlist UX and portfolio drill-down
 
 ### Added
-- Added `POST /watchlist/scan-one` for single-ticker watchlist rows so clients can stream progress one ticker at a time.
-- Added progressive Next.js watchlist scanning that appends rows as each ticker finishes instead of waiting for the whole list.
-- Added failed-ticker rows with clear messages when a symbol cannot be downloaded or analyzed.
-- Added max-ticker control and stop-scan button to make large scans safer.
-- Added `docs/BRANCHING_WORKFLOW.md`, a pull request template, and optional `scripts/ship_pr.ps1` for feature-branch/PR-based releases.
+- Added a one-ticker-at-a-time watchlist scan endpoint so the frontend can render rows progressively instead of waiting for the full universe.
+- Added searchable, scrollable frontend tables with compact symbol legends and clickable rows.
+- Added ticker detail modals with close-on-backdrop, Esc support, and source-linked news cards.
+- Added portfolio donut charts for holding weights and signal posture.
+- Added a root `template.tsx` reset boundary so page state resets cleanly when switching tabs.
 
 ### Changed
-- Watchlist frontend now encourages focused scans and keeps invalid/delisted tickers from blocking the whole run.
-- Price downloads now attempt a bounded yfinance timeout and suppress noisy provider messages, returning clearer application errors.
-- Bumped API metadata to 1.8.5 and frontend package version to 0.3.3.
+- Replaced raw failed-ticker errors with friendlier user-facing messages that explain the symbol may be delisted, renamed, unsupported, or temporarily unavailable.
+- Bumped API metadata to 1.8.6 and frontend package version to 0.3.3.
 
 ### Notes
-- Large watchlists should still be run in smaller batches. This release improves feedback and cancellation; it does not make hundreds of live model/news/risk calls instant.
-
+- This release keeps the existing source-link trust UX while making watchlist and portfolio workflows feel more like a product surface.
+- D3.js visualizations remain a future enhancement after the current interaction patterns settle.
 
 ## 1.8.4 — Frontend HCD polish and CSS cleanup
 
