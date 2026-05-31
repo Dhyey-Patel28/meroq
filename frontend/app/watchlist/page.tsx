@@ -2,14 +2,16 @@
 
 import { FormEvent, useMemo, useRef, useState } from "react";
 import { DataTable } from "@/components/DataTable";
+import { StockDetailModal } from "@/components/StockDetailModal";
 import { ErrorBox } from "@/components/StateBlocks";
 import { MetricCard } from "@/components/MetricCard";
 import { PageShell } from "@/components/PageShell";
 import {
   formatNumber,
   parseTickerList,
-  scanWatchlistTicker,
+  scanWatchlistOne,
   type ApiRecord,
+  type WatchlistSinglePayload,
 } from "@/lib/api";
 
 const columns = [
@@ -21,146 +23,113 @@ const columns = [
   "sentiment_label",
   "risk_label",
   "meroq_score",
-  "error",
+  "note",
 ];
 
-const DEFAULT_TICKERS = "AAPL,MSFT,NVDA,GOOGL,SPY,HOG,PLAY,QQQ,AMZN,TSLA";
-const MAX_SCAN_LIMIT = 100;
-
-function summarizeRows(rows: ApiRecord[]) {
-  const okRows = rows.filter((row) => row.status === "ok");
+function buildSummary(rows: ApiRecord[]) {
+  const okRows = rows.filter((row) => String(row.status ?? "").toLowerCase() === "ok");
   return {
-    scanned: okRows.length,
-    failed: rows.filter((row) => row.status === "failed").length,
+    scanned: rows.length,
+    ready: okRows.length,
+    issues: rows.length - okRows.length,
     bullish: okRows.filter((row) => String(row.final_signal ?? "").toLowerCase() === "bullish").length,
-    positiveSentiment: okRows.filter((row) => String(row.sentiment_label ?? "").toLowerCase() === "positive").length,
     highRisk: okRows.filter((row) => String(row.risk_label ?? "").toLowerCase().includes("high")).length,
   };
 }
 
-function sortByScore(rows: ApiRecord[]) {
+function sortRows(rows: ApiRecord[]) {
   return [...rows].sort((a, b) => {
-    const statusA = String(a.status ?? "");
-    const statusB = String(b.status ?? "");
-    if (statusA !== statusB) return statusA === "ok" ? -1 : 1;
-    const scoreA = Number(a.meroq_score);
-    const scoreB = Number(b.meroq_score);
-    if (Number.isFinite(scoreA) && Number.isFinite(scoreB)) return scoreB - scoreA;
-    if (Number.isFinite(scoreA)) return -1;
-    if (Number.isFinite(scoreB)) return 1;
-    return String(a.ticker ?? "").localeCompare(String(b.ticker ?? ""));
+    const aOk = String(a.status ?? "") === "ok" ? 1 : 0;
+    const bOk = String(b.status ?? "") === "ok" ? 1 : 0;
+    if (aOk !== bOk) return bOk - aOk;
+    return Number(b.meroq_score ?? -Infinity) - Number(a.meroq_score ?? -Infinity);
   });
 }
 
 export default function WatchlistPage() {
-  const [tickers, setTickers] = useState(DEFAULT_TICKERS);
+  const [tickers, setTickers] = useState("AAPL,MSFT,NVDA,GOOGL,SPY");
   const [period, setPeriod] = useState("5y");
-  const [maxTickers, setMaxTickers] = useState(25);
+  const [maxTickers, setMaxTickers] = useState(40);
   const [rows, setRows] = useState<ApiRecord[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [currentTicker, setCurrentTicker] = useState("");
-  const [plannedTickers, setPlannedTickers] = useState<string[]>([]);
-  const [skippedCount, setSkippedCount] = useState(0);
-  const controllerRef = useRef<AbortController | null>(null);
+  const [selectedRow, setSelectedRow] = useState<ApiRecord | null>(null);
+  const stopRef = useRef(false);
 
-  const rowSummary = useMemo(() => summarizeRows(rows), [rows]);
-  const rankedRows = useMemo(() => sortByScore(rows), [rows]);
-  const top = rankedRows
-    .filter((row) => row.status === "ok")
+  const summary = useMemo(() => buildSummary(rows), [rows]);
+  const sortedRows = useMemo<ApiRecord[]>(
+    () =>
+      sortRows(rows).map((row) => ({
+        ...row,
+        note:
+          String(row.status ?? "") === "failed"
+            ? row.error ?? "Data issue"
+            : row.headline_count
+              ? `${String(row.headline_count)} headlines reviewed`
+              : "Ready",
+      })),
+    [rows],
+  );
+
+  const top = sortedRows
+    .filter((row) => String(row.status ?? "") === "ok")
     .slice(0, 3)
     .map((row) => String(row.ticker))
     .join(", ");
 
-  const completedCount = rows.length;
-  const totalCount = plannedTickers.length;
-  const progressPct = totalCount ? Math.round((completedCount / totalCount) * 100) : 0;
-
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-
-    const parsed = parseTickerList(tickers);
-    const limit = Math.max(1, Math.min(MAX_SCAN_LIMIT, Number(maxTickers) || 25));
-    const planned = parsed.slice(0, limit);
-
-    if (!planned.length) {
-      setError("Add at least one ticker before running a scan.");
-      return;
-    }
-
-    const controller = new AbortController();
-    controllerRef.current = controller;
-
     setLoading(true);
     setError("");
     setRows([]);
     setCurrentTicker("");
-    setPlannedTickers(planned);
-    setSkippedCount(Math.max(0, parsed.length - planned.length));
+    stopRef.current = false;
+
+    const symbols = parseTickerList(tickers).slice(0, Math.max(1, maxTickers));
+    const basePayload: Omit<WatchlistSinglePayload, "ticker"> = {
+      period,
+      interval: "1d",
+      include_sentiment: true,
+      include_risk: true,
+      news_source: "all_configured",
+      sentiment_engine: "lightweight",
+      max_news_items: 10,
+      risk_paths: 300,
+      risk_horizon: 30,
+      days_back: 7,
+    };
 
     try {
-      for (const ticker of planned) {
-        if (controller.signal.aborted) break;
-        setCurrentTicker(ticker);
-
-        try {
-          const response = await scanWatchlistTicker(
-            {
-              ticker,
-              period,
-              interval: "1d",
-              include_sentiment: true,
-              include_risk: true,
-              news_source: "all_configured",
-              sentiment_engine: "lightweight",
-              max_news_items: 10,
-              risk_paths: 250,
-              risk_horizon: 30,
-              days_back: 7,
-            },
-            controller.signal,
-          );
-
-          setRows((existing) => [...existing, response.row]);
-        } catch (err) {
-          if (controller.signal.aborted) break;
-          setRows((existing) => [
-            ...existing,
-            {
-              ticker,
-              status: "failed",
-              error: err instanceof Error ? `Unable to load data for ${ticker}: ${err.message}` : `Unable to load data for ${ticker}.`,
-            },
-          ]);
-        }
+      for (const symbol of symbols) {
+        if (stopRef.current) break;
+        setCurrentTicker(symbol);
+        const response = await scanWatchlistOne({ ...basePayload, ticker: symbol });
+        setRows((current) => [...current, response.row]);
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Watchlist scan failed.");
     } finally {
-      setCurrentTicker("");
+      stopRef.current = false;
       setLoading(false);
-      controllerRef.current = null;
+      setCurrentTicker("");
     }
-  }
-
-  function stopScan() {
-    controllerRef.current?.abort();
-    setLoading(false);
-    setCurrentTicker("");
   }
 
   return (
     <PageShell>
       <section className="hero compact-hero">
         <p className="eyebrow">Watchlist scan</p>
-        <h1>Rank a focused universe by signal, sentiment, and risk.</h1>
-        <p>Rows appear as each ticker finishes. Failed or unavailable tickers are shown and skipped so one bad symbol does not block the scan.</p>
+        <h1>Rank a working watchlist as rows finish loading.</h1>
+        <p>Good rows appear immediately, failed symbols are marked with a compact issue note, and every row is searchable.</p>
       </section>
 
-      <form className="card form watchlist-form" onSubmit={onSubmit}>
+      <form className="card form" onSubmit={onSubmit}>
         <label>
           Watchlist tickers
-          <textarea rows={5} value={tickers} onChange={(event) => setTickers(event.target.value)} />
+          <textarea rows={4} value={tickers} onChange={(event) => setTickers(event.target.value)} />
         </label>
-        <div className="form-two-col">
+        <div className="grid cols-2">
           <label>
             History period
             <select value={period} onChange={(event) => setPeriod(event.target.value)}>
@@ -175,71 +144,98 @@ export default function WatchlistPage() {
             <input
               type="number"
               min={1}
-              max={MAX_SCAN_LIMIT}
+              max={200}
               value={maxTickers}
-              onChange={(event) => setMaxTickers(Number(event.target.value))}
+              onChange={(event) => setMaxTickers(Number(event.target.value) || 1)}
             />
           </label>
         </div>
         <div className="button-row">
-          <button disabled={loading}>{loading ? "Scanning..." : "Run progressive scan"}</button>
-          {loading ? (
-            <button type="button" className="secondary-button" onClick={stopScan}>
-              Stop scan
-            </button>
-          ) : null}
+          <button disabled={loading}>{loading ? "Scanning…" : "Run watchlist scan"}</button>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!loading}
+            onClick={() => {
+              stopRef.current = true;
+            }}
+          >
+            Stop scan
+          </button>
         </div>
         <p className="muted small">
-          Tip: start with 10–25 tickers. Very large lists can be slow because each symbol downloads prices, scores sentiment, and estimates risk.
+          Large local universes can take a while. Start with 25–40 names, then expand. Symbols that cannot be downloaded are skipped and labeled.
         </p>
       </form>
 
-      {error ? <ErrorBox message={error} /> : null}
-
-      {totalCount ? (
-        <section className="card scan-progress-card" style={{ marginTop: 18 }}>
-          <div className="card-heading-row">
+      {loading ? (
+        <section className="card subtle-card" style={{ marginTop: 18 }}>
+          <div className="loader-row">
+            <span className="spinner" />
             <div>
-              <p className="status-label">Progressive scan</p>
-              <h2>{loading ? `Scanning ${currentTicker || "watchlist"}...` : "Scan progress"}</h2>
+              <h3>Scanning {currentTicker || "watchlist"}…</h3>
+              <p className="muted">Rows are added as soon as each ticker finishes.</p>
+            </div>
+          </div>
+          <div className="progress-inline">
+            <div className="progress-track" aria-hidden="true">
+              <div
+                className="progress-fill"
+                style={{ width: `${Math.min(100, (summary.scanned / Math.max(1, Math.min(parseTickerList(tickers).length, maxTickers))) * 100)}%` }}
+              />
             </div>
             <span className="muted small">
-              {completedCount}/{totalCount} complete
+              {summary.scanned}/{Math.min(parseTickerList(tickers).length, maxTickers)} completed
             </span>
           </div>
-          <div className="progress-track" aria-label="Watchlist scan progress">
-            <div className="progress-fill" style={{ width: `${progressPct}%` }} />
-          </div>
-          {skippedCount ? (
-            <p className="muted small">
-              {skippedCount} extra tickers were not scanned because of the current max-ticker limit.
-            </p>
-          ) : null}
         </section>
       ) : null}
 
-      <section className="grid cols-4" style={{ marginTop: 18 }}>
-        <MetricCard label="Loaded" value={String(rowSummary.scanned)} info="Tickers that returned usable market data and completed scoring." />
-        <MetricCard label="Failed/skipped" value={String(rowSummary.failed)} info="Tickers that could not be downloaded or analyzed. They stay visible instead of blocking the scan." />
-        <MetricCard label="Positive sentiment" value={String(rowSummary.positiveSentiment)} />
-        <MetricCard label="High risk" value={String(rowSummary.highRisk)} />
-      </section>
+      {error ? <ErrorBox message={error} /> : null}
 
-      {rankedRows.length ? (
+      {rows.length ? (
+        <section className="grid cols-4" style={{ marginTop: 18 }}>
+          <MetricCard label="Completed" value={String(summary.scanned)} helper="Rows returned so far" />
+          <MetricCard label="Ready" value={String(summary.ready)} helper="Usable analyses" tone="positive" />
+          <MetricCard label="Issues" value={String(summary.issues)} helper="Skipped or unavailable" tone={summary.issues ? "warning" : "neutral"} />
+          <MetricCard label="Bullish" value={String(summary.bullish)} helper={`High risk names: ${summary.highRisk}`} />
+        </section>
+      ) : null}
+
+      {rows.length ? (
         <section className="card callout-card" style={{ marginTop: 18 }}>
           <p className="status-label">Quick read</p>
-          <h2>Highest-ranked: {top || "N/A"}</h2>
-          <p className="muted">Successful rows are ranked by Meroq Score. Failed rows remain visible with an explanation so you can clean the ticker list.</p>
+          <h2>Highest-ranked ready names: {top || "Still loading"}</h2>
+          <p className="muted">Use the legend below instead of raw status text. Click any row to open a richer ticker modal.</p>
         </section>
       ) : null}
 
       <section className="card" style={{ marginTop: 18 }}>
         <div className="card-heading-row">
-          <h2>Ranked scan</h2>
-          {rankedRows.length ? <span className="muted small">Top score: {formatNumber(rankedRows[0]?.meroq_score)}</span> : null}
+          <div>
+            <h2>Ranked scan</h2>
+            <p className="muted small">Searchable, scrollable, and row-clickable.</p>
+          </div>
+          {sortedRows.length ? <span className="muted small">Top score: {formatNumber(sortedRows[0]?.meroq_score)}</span> : null}
         </div>
-        <DataTable rows={rankedRows} columns={columns} maxRows={100} />
+        <DataTable
+          rows={sortedRows}
+          columns={columns}
+          searchPlaceholder="Search tickers, scores, signals, or issue notes…"
+          onRowClick={(row) => setSelectedRow(row)}
+          rowHint="Row details"
+          legend={
+            <div className="legend-row">
+              <span className="legend-pill positive">▲ Bullish / positive</span>
+              <span className="legend-pill warning">● Neutral / balanced</span>
+              <span className="legend-pill negative">▼ Bearish / higher concern</span>
+              <span className="legend-pill neutral">⚠ Data issue</span>
+            </div>
+          }
+        />
       </section>
+
+      <StockDetailModal ticker={selectedRow ? String(selectedRow.ticker ?? "") : null} period={period} baseRow={selectedRow} onClose={() => setSelectedRow(null)} />
     </PageShell>
   );
 }
