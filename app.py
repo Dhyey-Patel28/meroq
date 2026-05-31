@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import json
 
 import pandas as pd
 import plotly.express as px
@@ -55,6 +56,61 @@ from src.sentiment_modeling import (
 from src.watchlist import scan_watchlist, summarize_watchlist_scan
 from src.portfolio import build_portfolio_view, parse_portfolio_weights, portfolio_summary_sentence
 from src.reporting import build_insight_report
+
+
+# -----------------------------------------------------------------------------
+# Streamlit dataframe safety
+# -----------------------------------------------------------------------------
+# Streamlit serializes pandas DataFrames through Arrow. DataFrames with object
+# columns that mix strings, ints, floats, dicts, or lists can trigger noisy
+# PyArrow conversion tracebacks in the terminal even when Streamlit later applies
+# automatic fixes. The app uses a few compact settings/diagnostic frames with a
+# mixed "value" column, so we normalize those object columns before rendering.
+def _cell_to_display_text(value) -> object:
+    """Convert complex or missing values to stable display strings."""
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, (dict, list, tuple, set)):
+        try:
+            return json.dumps(value, default=str)
+        except TypeError:
+            return str(value)
+    return str(value)
+
+
+def _arrow_safe_frame(data: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy that avoids mixed object columns before st.dataframe."""
+    if data is None or data.empty:
+        return data
+    frame = data.copy()
+    for col in frame.columns:
+        if frame[col].dtype != "object":
+            continue
+        sample = frame[col].dropna().head(200).tolist()
+        if not sample:
+            continue
+        type_names = {type(item).__name__ for item in sample}
+        has_complex = any(isinstance(item, (dict, list, tuple, set)) for item in sample)
+        if has_complex or len(type_names) > 1:
+            frame[col] = frame[col].map(_cell_to_display_text)
+    return frame
+
+
+_ORIGINAL_ST_DATAFRAME = st.dataframe
+
+
+def _safe_st_dataframe(data=None, *args, **kwargs):
+    if isinstance(data, pd.DataFrame):
+        data = _arrow_safe_frame(data)
+    return _ORIGINAL_ST_DATAFRAME(data, *args, **kwargs)
+
+
+st.dataframe = _safe_st_dataframe
 
 
 st.set_page_config(page_title="Meroq", page_icon="📈", layout="wide")

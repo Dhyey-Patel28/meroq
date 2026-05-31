@@ -6,7 +6,7 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**1.3.0 — Service layer extraction**
+**1.3.1 — Service layer with dataframe rendering stability**
 
 This release starts separating Meroq's analysis engine from the Streamlit interface:
 

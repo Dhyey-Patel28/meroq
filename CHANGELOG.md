@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.1 — Streamlit dataframe rendering stability
+
+### Fixed
+
+- Added a dataframe rendering guard for mixed object columns before Streamlit serializes tables through Arrow.
+- Prevented noisy PyArrow tracebacks from sidebar summary tables and diagnostic tables with mixed string/numeric values.
+- Kept the 1.3.0 service layer unchanged.
+
 ## 1.3.0 — Service layer extraction
 
 ### Added
