@@ -1,18 +1,18 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { DataTable } from "@/components/DataTable";
 import { StockDetailModal } from "@/components/StockDetailModal";
 import { ErrorBox } from "@/components/StateBlocks";
 import { MetricCard } from "@/components/MetricCard";
 import { PageShell } from "@/components/PageShell";
+import { formatNumber, scanWatchlistOne, type ApiRecord, type WatchlistSinglePayload } from "@/lib/api";
 import {
-  formatNumber,
-  parseTickerList,
-  scanWatchlistOne,
-  type ApiRecord,
-  type WatchlistSinglePayload,
-} from "@/lib/api";
+  DEFAULT_WATCHLIST_PRESETS,
+  formatTickerList,
+  summarizeTickerInput,
+  type WatchlistPreset,
+} from "@/lib/tickerTools";
 
 const columns = [
   "status",
@@ -25,6 +25,8 @@ const columns = [
   "meroq_score",
   "note",
 ];
+
+const CUSTOM_PRESET_KEY = "meroq.watchlist.presets.v1";
 
 function buildSummary(rows: ApiRecord[]) {
   const okRows = rows.filter((row) => String(row.status ?? "").toLowerCase() === "ok");
@@ -46,6 +48,22 @@ function sortRows(rows: ApiRecord[]) {
   });
 }
 
+function loadCustomPresets(): WatchlistPreset[] {
+  try {
+    const stored = window.localStorage.getItem(CUSTOM_PRESET_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored) as WatchlistPreset[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((preset) => preset?.name && Array.isArray(preset.tickers));
+  } catch {
+    return [];
+  }
+}
+
+function persistCustomPresets(presets: WatchlistPreset[]) {
+  window.localStorage.setItem(CUSTOM_PRESET_KEY, JSON.stringify(presets));
+}
+
 export default function WatchlistPage() {
   const [tickers, setTickers] = useState("AAPL,MSFT,NVDA,GOOGL,SPY");
   const [period, setPeriod] = useState("5y");
@@ -57,8 +75,15 @@ export default function WatchlistPage() {
   const [selectedRow, setSelectedRow] = useState<ApiRecord | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "ready" | "issues" | "high-risk">("all");
   const [copyMessage, setCopyMessage] = useState("");
+  const [presetName, setPresetName] = useState("");
+  const [customPresets, setCustomPresets] = useState<WatchlistPreset[]>([]);
   const stopRef = useRef(false);
 
+  useEffect(() => {
+    setCustomPresets(loadCustomPresets());
+  }, []);
+
+  const inputSummary = useMemo(() => summarizeTickerInput(tickers, maxTickers), [maxTickers, tickers]);
   const summary = useMemo(() => buildSummary(rows), [rows]);
   const sortedRows = useMemo<ApiRecord[]>(
     () =>
@@ -92,6 +117,42 @@ export default function WatchlistPage() {
     .map((row) => String(row.ticker))
     .join(", ");
 
+  function loadPreset(preset: WatchlistPreset) {
+    setTickers(formatTickerList(preset.tickers));
+    setRows([]);
+    setStatusFilter("all");
+    setCopyMessage(`Loaded preset: ${preset.name}.`);
+  }
+
+  function saveCurrentPreset() {
+    const name = presetName.trim();
+    if (!name) {
+      setCopyMessage("Add a preset name before saving.");
+      return;
+    }
+    if (!inputSummary.uniqueSymbols.length) {
+      setCopyMessage("Add at least one ticker before saving a preset.");
+      return;
+    }
+    const nextPreset: WatchlistPreset = {
+      name,
+      tickers: inputSummary.uniqueSymbols,
+      createdAt: new Date().toISOString(),
+    };
+    const next = [nextPreset, ...customPresets.filter((preset) => preset.name.toLowerCase() !== name.toLowerCase())].slice(0, 12);
+    setCustomPresets(next);
+    persistCustomPresets(next);
+    setPresetName("");
+    setCopyMessage(`Saved preset: ${name}.`);
+  }
+
+  function deletePreset(name: string) {
+    const next = customPresets.filter((preset) => preset.name !== name);
+    setCustomPresets(next);
+    persistCustomPresets(next);
+    setCopyMessage(`Deleted preset: ${name}.`);
+  }
+
   async function copyTickers(label: string, symbols: string[]) {
     const value = symbols.join(",");
     if (!value) {
@@ -112,7 +173,7 @@ export default function WatchlistPage() {
     setStatusFilter("all");
     stopRef.current = false;
 
-    const symbols = parseTickerList(tickers).slice(0, Math.max(1, maxTickers));
+    const symbols = inputSummary.uniqueSymbols.slice(0, Math.max(1, maxTickers));
     const basePayload: Omit<WatchlistSinglePayload, "ticker"> = {
       period,
       interval: "1d",
@@ -147,7 +208,7 @@ export default function WatchlistPage() {
       <section className="hero compact-hero">
         <p className="eyebrow">Watchlist scan</p>
         <h1>Rank a working watchlist as rows finish loading.</h1>
-        <p>Good rows appear immediately, failed symbols are marked with a compact issue note, and every row is searchable.</p>
+        <p>Save reusable ticker sets, clean messy pasted lists, and scan only the symbols that are ready.</p>
       </section>
 
       <form className="card form" onSubmit={onSubmit}>
@@ -155,6 +216,73 @@ export default function WatchlistPage() {
           Watchlist tickers
           <textarea rows={4} value={tickers} onChange={(event) => setTickers(event.target.value)} />
         </label>
+
+        <section className="input-hygiene-panel">
+          <div>
+            <p className="status-label">Input hygiene</p>
+            <h3>{inputSummary.uniqueCount} unique ticker{inputSummary.uniqueCount === 1 ? "" : "s"}</h3>
+            <p className="muted small">
+              {inputSummary.rawCount} entered · {inputSummary.duplicateCount} duplicate{inputSummary.duplicateCount === 1 ? "" : "s"} removed · {inputSummary.scanCount} queued
+              {inputSummary.skippedByLimit ? ` · ${inputSummary.skippedByLimit} held by max limit` : ""}
+            </p>
+          </div>
+          <div className="button-row">
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                setTickers(formatTickerList(inputSummary.uniqueSymbols));
+                setCopyMessage("Cleaned and deduplicated the input list.");
+              }}
+            >
+              Clean list
+            </button>
+            <button className="secondary-button" type="button" onClick={() => copyTickers("clean", inputSummary.uniqueSymbols)}>
+              Copy clean list
+            </button>
+          </div>
+        </section>
+
+        <section className="preset-panel">
+          <div className="card-heading-row">
+            <div>
+              <p className="status-label">Presets</p>
+              <h3>Reusable watchlists</h3>
+            </div>
+          </div>
+          <div className="preset-grid">
+            {DEFAULT_WATCHLIST_PRESETS.map((preset) => (
+              <button className="preset-card" type="button" key={preset.name} onClick={() => loadPreset(preset)}>
+                <strong>{preset.name}</strong>
+                <span>{preset.tickers.slice(0, 5).join(", ")}{preset.tickers.length > 5 ? "…" : ""}</span>
+              </button>
+            ))}
+          </div>
+          <div className="preset-save-row">
+            <label>
+              Save current list as
+              <input value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="Example: My AI watchlist" />
+            </label>
+            <button className="secondary-button" type="button" onClick={saveCurrentPreset}>
+              Save preset
+            </button>
+          </div>
+          {customPresets.length ? (
+            <div className="saved-preset-list">
+              {customPresets.map((preset) => (
+                <div className="saved-preset-row" key={preset.name}>
+                  <button className="text-button" type="button" onClick={() => loadPreset(preset)}>
+                    {preset.name} · {preset.tickers.length} tickers
+                  </button>
+                  <button className="danger-link" type="button" onClick={() => deletePreset(preset.name)}>
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
+
         <div className="grid cols-2">
           <label>
             History period
@@ -177,7 +305,7 @@ export default function WatchlistPage() {
           </label>
         </div>
         <div className="button-row">
-          <button disabled={loading}>{loading ? "Scanning…" : "Run watchlist scan"}</button>
+          <button disabled={loading || !inputSummary.uniqueSymbols.length}>{loading ? "Scanning…" : "Run watchlist scan"}</button>
           <button
             type="button"
             className="secondary-button"
@@ -194,6 +322,8 @@ export default function WatchlistPage() {
         </p>
       </form>
 
+      {copyMessage ? <p className="muted small form-status">{copyMessage}</p> : null}
+
       {loading ? (
         <section className="card subtle-card" style={{ marginTop: 18 }}>
           <div className="loader-row">
@@ -207,11 +337,11 @@ export default function WatchlistPage() {
             <div className="progress-track" aria-hidden="true">
               <div
                 className="progress-fill"
-                style={{ width: `${Math.min(100, (summary.scanned / Math.max(1, Math.min(parseTickerList(tickers).length, maxTickers))) * 100)}%` }}
+                style={{ width: `${Math.min(100, (summary.scanned / Math.max(1, inputSummary.scanCount)) * 100)}%` }}
               />
             </div>
             <span className="muted small">
-              {summary.scanned}/{Math.min(parseTickerList(tickers).length, maxTickers)} completed
+              {summary.scanned}/{inputSummary.scanCount} completed
             </span>
           </div>
         </section>
@@ -243,7 +373,6 @@ export default function WatchlistPage() {
               <p className="status-label">Result controls</p>
               <h2>Clean up this scan</h2>
             </div>
-            {copyMessage ? <span className="muted small">{copyMessage}</span> : null}
           </div>
           <div className="filter-row" role="group" aria-label="Watchlist result filters">
             {[

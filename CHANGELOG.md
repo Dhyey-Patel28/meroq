@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.8.8 — Watchlist presets and ticker hygiene
+
+### Added
+- Added built-in watchlist presets for core market, AI infrastructure, fintech/crypto beta, and consumer/autos.
+- Added custom watchlist presets saved locally in the browser.
+- Added input hygiene metrics for entered, unique, duplicate, queued, and max-limited tickers.
+- Added clean-list and copy-clean-list actions before scanning.
+
+### Changed
+- Progressive scans now use the normalized unique ticker list, reducing wasted requests from duplicate or messy pasted input.
+- Bumped frontend package version to 0.3.5.
+
+### Notes
+- Presets are stored only in local browser storage. They are not sent to the backend until the user runs a scan.
+
 ## 1.8.7 — Watchlist cleanup controls and table exports
 
 ### Added
