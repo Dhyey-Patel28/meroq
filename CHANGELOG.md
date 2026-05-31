@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.8.4 — Frontend HCD polish and CSS cleanup
+
+### Added
+- Added small hover/focus info icons to frontend metric cards so explanations are available on demand without cluttering the page.
+- Added suggested ticker chips to the frontend ticker page for faster exploration.
+
+### Changed
+- Replaced CSS `align-items: start` with `flex-start` to resolve the Autoprefixer compatibility warning.
+- Bumped API metadata to 1.8.4 and frontend package version to 0.3.2.
+
+### Notes
+- This is a polish release that keeps the 1.8.2/1.8.3 forecast UX and repository hygiene intact.
+- D3 remains planned for a later visualization phase after the frontend data contracts settle.
+
 ## 1.8.3 — Repo Hygiene Recovery
 
 - Restored `.gitignore`, `.gitattributes`, `.github/workflows/ci.yml`, and `data/.gitkeep` to the release package.

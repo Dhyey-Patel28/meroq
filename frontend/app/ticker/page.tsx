@@ -81,6 +81,7 @@ function plainLanguageRead(summary: ApiRecord, riskSummary?: ApiRecord) {
 }
 
 const headlineColumns = ["published_at", "publisher", "source", "sentiment_label", "sentiment_score", "confidence", "title", "url"];
+const suggestedTickers = ["AAPL", "MSFT", "NVDA", "SPY", "HOG", "PLAY"];
 
 export default function TickerPage() {
   const [ticker, setTicker] = useState("AAPL");
@@ -155,6 +156,13 @@ export default function TickerPage() {
             Ticker
             <input value={ticker} onChange={(event) => setTicker(event.target.value.toUpperCase())} />
           </label>
+          <div className="ticker-chip-row" aria-label="Suggested tickers">
+            {suggestedTickers.map((symbol) => (
+              <button className="ticker-chip" type="button" key={symbol} onClick={() => setTicker(symbol)}>
+                {symbol}
+              </button>
+            ))}
+          </div>
           <div className="grid cols-2">
             <label>
               Period
@@ -212,16 +220,16 @@ export default function TickerPage() {
         <>
           <section className="grid cols-4" style={{ marginTop: 18 }}>
             <MetricCard label="Latest close" value={formatMoney(summary.latest_close)} helper={String(summary.latest_data_date ?? "")} />
-            <MetricCard label="Base probability" value={formatPct(summary.base_up_probability)} />
-            <MetricCard label="Adjusted probability" value={formatPct(summary.final_up_probability)} />
-            <MetricCard label="Confidence" value={confidence} />
+            <MetricCard label="Base probability" value={formatPct(summary.base_up_probability)} info="The model-only up probability before recent-news sentiment is applied." />
+            <MetricCard label="Adjusted probability" value={formatPct(summary.final_up_probability)} info="The final probability after the conservative sentiment overlay. It is still a research estimate, not a guarantee." />
+            <MetricCard label="Confidence" value={confidence} info="Based on how far the probability is from 50/50. Close-to-balanced forecasts are marked low confidence." />
           </section>
 
           <section className="grid cols-4" style={{ marginTop: 18 }}>
             <MetricCard label="News sentiment" value={String(summary.news_sentiment_label ?? "Skipped")} helper={sourceSummary} />
-            <MetricCard label="Sentiment adjustment" value={formatSignedPctPoints(summary.sentiment_adjustment_pct_points)} />
-            <MetricCard label="Positive return probability" value={formatPct(riskSummary?.probability_positive_return)} />
-            <MetricCard label="Loss > 5% probability" value={formatPct(riskSummary?.probability_loss_gt_5pct)} />
+            <MetricCard label="Sentiment adjustment" value={formatSignedPctPoints(summary.sentiment_adjustment_pct_points)} info="How much recent-news sentiment tilted the model probability." />
+            <MetricCard label="Positive return probability" value={formatPct(riskSummary?.probability_positive_return)} info="Monte Carlo estimate for ending above the current close over the selected horizon." />
+            <MetricCard label="Loss > 5% probability" value={formatPct(riskSummary?.probability_loss_gt_5pct)} info="Monte Carlo estimate for a loss greater than 5% over the selected horizon." />
           </section>
 
           <DecisionPanel summary={summary} riskSummary={riskSummary} />

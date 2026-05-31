@@ -83,3 +83,11 @@ The frontend ticker workflow should show a human-readable answer before implemen
 5. raw headline tables only after disclosure.
 
 The forecast chart uses risk percentile data returned by the FastAPI endpoint when `return_details=true`.
+
+
+## 1.8.4 polish update
+
+- Metric explanations are now available through small hover/focus info icons instead of always-visible helper copy.
+- Suggested ticker chips reduce input friction for first-time users.
+- The CSS alignment warning from Autoprefixer was fixed by using `flex-start` where browser support is clearer.
+- The forecast chart remains a lightweight accessible SVG. D3.js is still reserved for a later visualization layer once the API response shapes are more stable.
