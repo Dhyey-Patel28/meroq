@@ -6,15 +6,15 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**Release 1.4.1 — Forecast-first prediction UX**
+**Release 1.4.2 — Prediction page cleanup**
 
-This release makes the Prediction tab easier for non-technical users:
+This release cleans up the Forecast-first prediction experience:
 
-- Adds a reusable single-ticker analysis service in `src/services.py`
-- Adds `scripts/analyze_ticker.py` for command-line analysis outside the UI
-- Creates a cleaner path toward future FastAPI and Next.js migration
-- Keeps Streamlit as the product UI while making core analysis testable and scriptable
-- Documents the service layer contract in `docs/SERVICE_LAYER.md`
+- Keeps the Prediction tab focused on current price, forecast range, confidence, and plain-English reasoning
+- Removes the historical probability diagnostic from the main Prediction tab
+- Moves the historical model-probability diagnostic to Model Details
+- Replaces always-visible technical explanations with compact metric help tooltips and collapsed advanced details
+- Adds `*.zip` to `.gitignore` so local release archives are not accidentally committed
 
 ## Core capabilities
 

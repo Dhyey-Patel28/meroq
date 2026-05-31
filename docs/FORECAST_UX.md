@@ -33,3 +33,9 @@ Meroq should not pretend it can predict an exact future stock price. A range is 
 - Add a tooltip explaining that the chart is simulation-based, not a guaranteed price target.
 - Let users switch between recent 1-year history and full selected history on the forecast chart.
 - Add benchmark context such as SPY comparison.
+
+## 1.4.2 cleanup
+
+The Prediction tab should not show model-diagnostic charts by default. Historical probability diagnostics are now kept in Model Details so the primary Prediction tab stays focused on current close, forecast range, confidence, and plain-English reasoning.
+
+Technical explanations are also collapsed behind hover/help text and advanced expanders instead of being displayed as permanent table columns.

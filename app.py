@@ -908,33 +908,42 @@ def render_prediction_section(
         vol_label, vol_text = _volatility_interpretation(float(latest_row["volatility_20"]))
 
         t1, t2, t3 = st.columns(3)
-        t1.metric("Momentum", rsi_label, f"RSI {float(latest_row['rsi_14']):.1f}")
-        t2.metric("Trend pressure", trend_label, f"MACD {float(latest_row['macd_diff']):.4f}")
-        t3.metric("Recent volatility", vol_label, f"{float(latest_row['volatility_20']):.2%}")
-        st.caption(f"{rsi_text} {trend_text} {vol_text}")
+        t1.metric(
+            "Momentum",
+            rsi_label,
+            f"RSI {float(latest_row['rsi_14']):.1f}",
+            help=rsi_text,
+        )
+        t2.metric(
+            "Trend pressure",
+            trend_label,
+            f"MACD {float(latest_row['macd_diff']):.4f}",
+            help=trend_text,
+        )
+        t3.metric(
+            "Recent volatility",
+            vol_label,
+            f"{float(latest_row['volatility_20']):.2%}",
+            help=vol_text,
+        )
 
         with st.expander("Advanced technical values", expanded=False):
             tech_df = pd.DataFrame([
-                {"item": "Close", "value": f"${current_close:,.2f}", "meaning": "Latest adjusted close used by the model."},
-                {"item": "Latest return", "value": f"{float(latest_row['return_1d']):.2%}", "meaning": "Most recent one-period price change."},
-                {"item": "RSI 14", "value": f"{float(latest_row['rsi_14']):.1f}", "meaning": "Momentum indicator; high can mean extended, low can mean oversold."},
-                {"item": "MACD diff", "value": f"{float(latest_row['macd_diff']):.4f}", "meaning": "Trend/momentum pressure relative to signal line."},
-                {"item": "ATR %", "value": f"{float(latest_row['atr_pct']):.2%}", "meaning": "Average true range scaled by price; higher means wider normal moves."},
-                {"item": "Bollinger position", "value": f"{float(latest_row['bb_position']):.3f}", "meaning": "Where price sits inside the Bollinger range."},
-                {"item": "Primary model", "value": selected_model_label, "meaning": "Model selected for the main directional probability."},
+                {"item": "Close", "value": f"${current_close:,.2f}"},
+                {"item": "Latest return", "value": f"{float(latest_row['return_1d']):.2%}"},
+                {"item": "RSI 14", "value": f"{float(latest_row['rsi_14']):.1f}"},
+                {"item": "MACD diff", "value": f"{float(latest_row['macd_diff']):.4f}"},
+                {"item": "ATR %", "value": f"{float(latest_row['atr_pct']):.2%}"},
+                {"item": "Bollinger position", "value": f"{float(latest_row['bb_position']):.3f}"},
+                {"item": "Primary model", "value": selected_model_label},
             ])
             st.dataframe(tech_df, width="stretch", hide_index=True)
+            with st.expander("What do these technical terms mean?", expanded=False):
+                st.write(f"- **RSI:** {rsi_text}")
+                st.write(f"- **MACD:** {trend_text}")
+                st.write(f"- **Volatility:** {vol_text}")
 
-        with st.expander("Advanced diagnostics: historical model probability", expanded=False):
-            st.caption(
-                "This diagnostic is not the forecast. It shows how the simple train/test split behaved historically. "
-                "Use it to inspect model noise, not as the main prediction."
-            )
-            st.plotly_chart(
-                make_backtest_preview(results["test"], results["test_probabilities"], ticker),
-                width="stretch",
-                key=f"simple_backtest_preview_{ticker}_{selected_model_label}_{render_key}",
-            )
+        st.caption("Advanced model diagnostics are available in the Model Details tab.")
 
 def render_chart_section(feature_df: pd.DataFrame, ticker: str) -> None:
     with chart_placeholder.container():
@@ -1335,7 +1344,7 @@ def render_comparison_section(simple_comparison: pd.DataFrame, wf_comparison: pd
             )
 
 
-def render_model_details_section(results: dict, selected_model_label: str) -> None:
+def render_model_details_section(results: dict, selected_model_label: str, ticker: str) -> None:
     with model_details_placeholder.container():
         st.subheader("Primary model details")
         st.write(f"Selected model: **{selected_model_label}**")
@@ -1345,6 +1354,16 @@ def render_model_details_section(results: dict, selected_model_label: str) -> No
 
         st.subheader("Feature importance / coefficient magnitude")
         st.plotly_chart(make_feature_importance_chart(results["feature_importance"]), width="stretch", key=f"feature_importance_{selected_model_label}")
+
+        with st.expander("Historical probability diagnostic", expanded=False):
+            st.caption(
+                "This is a model diagnostic, not the user-facing forecast. It shows close price against simple-split prediction probability."
+            )
+            st.plotly_chart(
+                make_backtest_preview(results["test"], results["test_probabilities"], ticker),
+                width="stretch",
+                key=f"model_details_probability_diagnostic_{selected_model_label}",
+            )
 
         st.warning(
             "Low accuracy is normal for market direction prediction. The goal is not just accuracy; it is robust "
@@ -1830,7 +1849,7 @@ try:
         42,
         f"Primary model trained: {selected_model_label} simple-split accuracy {results['metrics']['accuracy']:.1%}, ROC-AUC {primary_auc_text}.",
     )
-    render_model_details_section(results, selected_model_label)
+    render_model_details_section(results, selected_model_label, ticker)
 
     update_run_monitor("Latest prediction", "running", "Scoring latest row", 44)
     latest_row = feature_df.iloc[-1]
@@ -1845,7 +1864,10 @@ try:
     latest_close = float(raw_df["Close"].iloc[-1])
     latest_date = pd.to_datetime(raw_df["Date"].iloc[-1]).date()
     render_summary_metrics(ticker, latest_close, latest_date, selected_model_label, prediction, results, None, risk_results=None, sentiment_summary=None, analysis_mode=analysis_mode)
-    render_prediction_section(latest_row, prediction, results, ticker, selected_model_label, raw_df=raw_df, interval=interval, render_key="base")
+    with prediction_placeholder.container():
+        st.info(
+            "Directional model is ready. Building the forecast range, news overlay, and final explanation..."
+        )
 
     risk_results = None
     if run_risk_simulation:

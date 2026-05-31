@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.4.2 - Prediction page cleanup
+
+### Fixed
+- Removed duplicate historical probability diagnostic charts from the Prediction tab.
+- Prevented the Prediction tab from briefly rendering an intermediate diagnostic view before the final forecast view.
+
+### Changed
+- Moved the simple train/test probability diagnostic to the Model Details tab.
+- Replaced always-visible technical explanation text with hover/help tooltips on the technical summary metrics.
+- Simplified the advanced technical table so it shows values first and explanations only when expanded.
+
+### Maintenance
+- Added `*.zip` to `.gitignore` to prevent local release archives from being committed.
+
 ## 1.4.1 - Forecast-first Prediction UX
 
 ### Changed
