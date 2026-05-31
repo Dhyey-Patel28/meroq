@@ -1194,3 +1194,105 @@ code {
   background: var(--accent-soft);
   color: var(--accent-strong);
 }
+
+/* 1.8.8 watchlist preset and ticker hygiene controls */
+.input-hygiene-panel,
+.preset-panel {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 16px;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+}
+
+.input-hygiene-panel {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.input-hygiene-panel h3,
+.preset-panel h3 {
+  margin: 0 0 6px;
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.preset-card {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 12px;
+  background: #fff;
+  color: var(--foreground);
+}
+
+.preset-card span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.preset-card:hover {
+  border-color: #b7c2ff;
+  transform: translateY(-1px);
+}
+
+.preset-save-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.saved-preset-list {
+  display: grid;
+  gap: 8px;
+}
+
+.saved-preset-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.text-button,
+.danger-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: var(--accent);
+  font-weight: 900;
+  text-align: left;
+}
+
+.danger-link {
+  color: var(--danger);
+}
+
+.form-status {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+}
+
+@media (max-width: 950px) {
+  .input-hygiene-panel,
+  .preset-save-row,
+  .preset-grid {
+    grid-template-columns: 1fr;
+  }
+}
