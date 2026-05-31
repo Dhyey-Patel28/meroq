@@ -6,9 +6,9 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**Release 1.4.0 — Service layer with dataframe rendering stability**
+**Release 1.4.1 — Forecast-first prediction UX**
 
-This release starts separating Meroq's analysis engine from the Streamlit interface:
+This release makes the Prediction tab easier for non-technical users:
 
 - Adds a reusable single-ticker analysis service in `src/services.py`
 - Adds `scripts/analyze_ticker.py` for command-line analysis outside the UI

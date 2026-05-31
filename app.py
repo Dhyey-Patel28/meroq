@@ -16,6 +16,7 @@ from src.charts import (
     make_model_metric_bar_chart,
     make_price_chart,
     make_monte_carlo_percentile_chart,
+    make_price_forecast_chart,
     make_monte_carlo_sample_paths_chart,
     make_final_return_distribution_chart,
     make_sentiment_label_chart,
@@ -732,49 +733,203 @@ def render_summary_metrics(
         col12.metric("Model confidence lens", "Low" if results['metrics']['accuracy'] < 0.52 else "Moderate")
 
 
-def render_prediction_section(latest_row, prediction: dict, results: dict, ticker: str, selected_model_label: str, sentiment_fusion=None, render_key: str = "final") -> None:
-    with prediction_placeholder.container():
-        st.subheader("Prediction summary")
 
-        adjusted_probability = prediction["up_probability"]
+def _interval_noun(interval: str) -> str:
+    """Return a readable period noun for the selected interval."""
+    return "weeks" if str(interval).lower().strip() == "1wk" else "trading days"
+
+
+def _probability_confidence_label(probability: float, model_accuracy: float | None = None) -> str:
+    """Translate probability/model quality into a plain-English confidence label."""
+    distance = abs(float(probability) - 0.5)
+    accuracy = 0.0 if model_accuracy is None or pd.isna(model_accuracy) else float(model_accuracy)
+    if distance < 0.05 or accuracy < 0.52:
+        return "Low"
+    if distance < 0.12 or accuracy < 0.56:
+        return "Moderate"
+    return "Higher"
+
+
+def _rsi_interpretation(rsi_value: float) -> tuple[str, str]:
+    rsi = float(rsi_value)
+    if rsi >= 70:
+        return "Extended / overbought", "RSI is high, so the stock may be stretched in the short term."
+    if rsi <= 30:
+        return "Weak / oversold", "RSI is low, so the stock may be washed out or under pressure."
+    return "Balanced momentum", "RSI is in a more neutral range."
+
+
+def _trend_interpretation(macd_diff: float) -> tuple[str, str]:
+    value = float(macd_diff)
+    if value > 0.05:
+        return "Positive trend pressure", "MACD is above signal, suggesting positive momentum."
+    if value < -0.05:
+        return "Negative trend pressure", "MACD is below signal, suggesting negative momentum."
+    return "Flat trend pressure", "MACD is close to neutral."
+
+
+def _volatility_interpretation(volatility: float) -> tuple[str, str]:
+    vol = float(volatility)
+    if vol >= 0.03:
+        return "High volatility", "Recent daily moves are large, so the forecast range should be treated cautiously."
+    if vol >= 0.015:
+        return "Moderate volatility", "Recent price movement is noticeable but not extreme."
+    return "Lower volatility", "Recent price movement has been relatively calm."
+
+
+def _build_forecast_sentence(
+    ticker: str,
+    adjusted_signal: str,
+    adjusted_probability: float,
+    risk_results: dict | None,
+    confidence_label: str,
+    interval: str,
+) -> str:
+    """Create a beginner-friendly forecast sentence."""
+    if risk_results is None:
+        return (
+            f"Meroq currently rates {ticker.upper()} as **{adjusted_signal}** with a "
+            f"{adjusted_probability:.1%} estimated chance of an upward next-period move. "
+            "Turn on risk simulation to show an expected future price range."
+        )
+
+    summary = risk_results["summary"]
+    horizon = int(summary.get("horizon", 0))
+    period_word = _interval_noun(interval)
+    return (
+        f"Meroq currently rates {ticker.upper()} as **{adjusted_signal}**. "
+        f"The estimated upward-move probability is **{adjusted_probability:.1%}**, "
+        f"with **{confidence_label.lower()} confidence**. Based on the risk simulation, "
+        f"the median {horizon}-{period_word} forecast is **${summary['median_final_price']:,.2f}**, "
+        f"with a likely range of **${summary['p10_final_price']:,.2f}–${summary['p90_final_price']:,.2f}**."
+    )
+
+def render_prediction_section(
+    latest_row,
+    prediction: dict,
+    results: dict,
+    ticker: str,
+    selected_model_label: str,
+    sentiment_fusion=None,
+    risk_results: dict | None = None,
+    raw_df: pd.DataFrame | None = None,
+    interval: str = "1d",
+    render_key: str = "final",
+) -> None:
+    """Render the user-facing forecast page.
+
+    The Prediction tab should answer what a normal user expects first:
+    current close, expected future range, confidence, and why the app says that.
+    Model diagnostic charts stay hidden under Advanced diagnostics.
+    """
+    with prediction_placeholder.container():
+        adjusted_probability = float(prediction["up_probability"])
         adjusted_signal = prediction["signal"]
         adjustment_text = "No overlay"
         if sentiment_fusion is not None and sentiment_fusion.get("available"):
-            adjusted_probability = sentiment_fusion["adjusted_up_probability"]
+            adjusted_probability = float(sentiment_fusion["adjusted_up_probability"])
             adjusted_signal = sentiment_fusion["signal"]
             adjustment_text = f"{sentiment_fusion['adjustment_pct_points']:+.2f} percentage points"
 
-        a, b, c, d = st.columns(4)
-        a.metric("Base signal", prediction["signal"])
-        b.metric("Base up probability", f"{prediction['up_probability']:.1%}")
-        c.metric("Final signal", adjusted_signal)
-        d.metric("Final up probability", f"{adjusted_probability:.1%}", adjustment_text)
+        model_accuracy = results.get("metrics", {}).get("accuracy")
+        confidence_label = _probability_confidence_label(adjusted_probability, model_accuracy)
 
-        st.progress(float(adjusted_probability), text=f"Final up-probability estimate: {adjusted_probability:.1%}")
+        st.subheader(f"{ticker.upper()} forecast")
+        st.write(
+            _build_forecast_sentence(
+                ticker=ticker,
+                adjusted_signal=adjusted_signal,
+                adjusted_probability=adjusted_probability,
+                risk_results=risk_results,
+                confidence_label=confidence_label,
+                interval=interval,
+            )
+        )
+
+        current_close = float(latest_row["Close"])
+        period_word = _interval_noun(interval)
+        if risk_results is not None:
+            risk_summary = risk_results["summary"]
+            horizon = int(risk_summary.get("horizon", 0))
+            f1, f2, f3, f4 = st.columns(4)
+            f1.metric("Current close", f"${current_close:,.2f}")
+            f2.metric(f"Median {horizon}-{period_word} price", f"${risk_summary['median_final_price']:,.2f}", f"{risk_summary['median_return']:.1%}")
+            f3.metric("Likely range", f"${risk_summary['p10_final_price']:,.2f} – ${risk_summary['p90_final_price']:,.2f}")
+            f4.metric("Confidence", confidence_label)
+
+            if raw_df is not None:
+                st.plotly_chart(
+                    make_price_forecast_chart(
+                        raw_df,
+                        risk_results["percentiles"],
+                        ticker,
+                        interval=interval,
+                        lookback=252 if interval == "1d" else 156,
+                    ),
+                    width="stretch",
+                    key=f"price_forecast_{ticker}_{selected_model_label}_{render_key}_{risk_summary['horizon']}_{risk_summary['n_paths']}",
+                )
+        else:
+            f1, f2, f3, f4 = st.columns(4)
+            f1.metric("Current close", f"${current_close:,.2f}")
+            f2.metric("Final signal", adjusted_signal)
+            f3.metric("Final up probability", f"{adjusted_probability:.1%}", adjustment_text)
+            f4.metric("Confidence", confidence_label)
+            st.info("Forecast price range is waiting for Monte Carlo risk simulation. The directional model is ready, but price-range output needs simulation results.")
+
+        st.subheader("Why this outlook?")
+        reasons: list[str] = []
+        base_prob = float(prediction["up_probability"])
+        if base_prob >= 0.55:
+            reasons.append(f"The selected model leans upward with a base probability of {base_prob:.1%}.")
+        elif base_prob <= 0.45:
+            reasons.append(f"The selected model leans downward with a base probability of {base_prob:.1%}.")
+        else:
+            reasons.append(f"The selected model is close to 50/50 at {base_prob:.1%}, so the directional signal is not strong.")
 
         if sentiment_fusion is not None and sentiment_fusion.get("available"):
-            st.info(f"{sentiment_fusion['explanation']} {sentiment_fusion['reason']}")
-            components = build_signal_components_frame(sentiment_fusion)
-            if not components.empty:
-                st.dataframe(components, width="stretch", hide_index=True)
+            reasons.append(sentiment_fusion.get("reason", "Recent-news sentiment adjusted the final signal."))
         else:
-            st.caption("Sentiment overlay is unavailable or disabled. The final signal equals the base model signal.")
+            reasons.append("Recent-news sentiment did not change the signal, either because it was disabled or unavailable.")
 
-        st.subheader("Latest market snapshot")
-        s1, s2, s3, s4 = st.columns(4)
-        s1.metric("Close", f"${float(latest_row['Close']):,.2f}")
-        s2.metric("Latest return", f"{float(latest_row['return_1d']):.2%}")
-        s3.metric("RSI 14", f"{float(latest_row['rsi_14']):.1f}")
-        s4.metric("20-period volatility", f"{float(latest_row['volatility_20']):.2%}")
+        if risk_results is not None:
+            risk_summary = risk_results["summary"]
+            reasons.append(
+                f"Risk simulation shows a {risk_summary['probability_positive_return']:.1%} chance of a positive return "
+                f"and a {risk_summary['probability_loss_gt_5pct']:.1%} chance of losing more than 5% over the forecast horizon."
+            )
 
-        s5, s6, s7, s8 = st.columns(4)
-        s5.metric("MACD diff", f"{float(latest_row['macd_diff']):.4f}")
-        s6.metric("ATR %", f"{float(latest_row['atr_pct']):.2%}")
-        s7.metric("Bollinger position", f"{float(latest_row['bb_position']):.3f}")
-        s8.metric("Primary model", selected_model_label)
+        for reason in reasons:
+            st.write(f"- {reason}")
 
-        with st.expander("Show simple test split preview", expanded=False):
-            st.caption("This chart is a diagnostic, not a trading signal. It compares historical close price with simple-split prediction probabilities.")
+        st.subheader("Technical read")
+        rsi_label, rsi_text = _rsi_interpretation(float(latest_row["rsi_14"]))
+        trend_label, trend_text = _trend_interpretation(float(latest_row["macd_diff"]))
+        vol_label, vol_text = _volatility_interpretation(float(latest_row["volatility_20"]))
+
+        t1, t2, t3 = st.columns(3)
+        t1.metric("Momentum", rsi_label, f"RSI {float(latest_row['rsi_14']):.1f}")
+        t2.metric("Trend pressure", trend_label, f"MACD {float(latest_row['macd_diff']):.4f}")
+        t3.metric("Recent volatility", vol_label, f"{float(latest_row['volatility_20']):.2%}")
+        st.caption(f"{rsi_text} {trend_text} {vol_text}")
+
+        with st.expander("Advanced technical values", expanded=False):
+            tech_df = pd.DataFrame([
+                {"item": "Close", "value": f"${current_close:,.2f}", "meaning": "Latest adjusted close used by the model."},
+                {"item": "Latest return", "value": f"{float(latest_row['return_1d']):.2%}", "meaning": "Most recent one-period price change."},
+                {"item": "RSI 14", "value": f"{float(latest_row['rsi_14']):.1f}", "meaning": "Momentum indicator; high can mean extended, low can mean oversold."},
+                {"item": "MACD diff", "value": f"{float(latest_row['macd_diff']):.4f}", "meaning": "Trend/momentum pressure relative to signal line."},
+                {"item": "ATR %", "value": f"{float(latest_row['atr_pct']):.2%}", "meaning": "Average true range scaled by price; higher means wider normal moves."},
+                {"item": "Bollinger position", "value": f"{float(latest_row['bb_position']):.3f}", "meaning": "Where price sits inside the Bollinger range."},
+                {"item": "Primary model", "value": selected_model_label, "meaning": "Model selected for the main directional probability."},
+            ])
+            st.dataframe(tech_df, width="stretch", hide_index=True)
+
+        with st.expander("Advanced diagnostics: historical model probability", expanded=False):
+            st.caption(
+                "This diagnostic is not the forecast. It shows how the simple train/test split behaved historically. "
+                "Use it to inspect model noise, not as the main prediction."
+            )
             st.plotly_chart(
                 make_backtest_preview(results["test"], results["test_probabilities"], ticker),
                 width="stretch",
@@ -1690,7 +1845,7 @@ try:
     latest_close = float(raw_df["Close"].iloc[-1])
     latest_date = pd.to_datetime(raw_df["Date"].iloc[-1]).date()
     render_summary_metrics(ticker, latest_close, latest_date, selected_model_label, prediction, results, None, risk_results=None, sentiment_summary=None, analysis_mode=analysis_mode)
-    render_prediction_section(latest_row, prediction, results, ticker, selected_model_label, render_key="base")
+    render_prediction_section(latest_row, prediction, results, ticker, selected_model_label, raw_df=raw_df, interval=interval, render_key="base")
 
     risk_results = None
     if run_risk_simulation:
@@ -1839,7 +1994,7 @@ try:
             55,
         )
 
-    render_prediction_section(latest_row, prediction, results, ticker, selected_model_label, sentiment_fusion=sentiment_fusion, render_key="final")
+    render_prediction_section(latest_row, prediction, results, ticker, selected_model_label, sentiment_fusion=sentiment_fusion, risk_results=risk_results, raw_df=raw_df, interval=interval, render_key="final")
     render_summary_metrics(
         ticker,
         latest_close,

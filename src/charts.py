@@ -351,3 +351,122 @@ def make_sentiment_timeline_chart(sentiment_df: pd.DataFrame, ticker: str) -> go
     fig.update_layout(height=360, xaxis_title="Date", yaxis_title="Average sentiment")
     fig.update_yaxes(range=[-1, 1])
     return fig
+
+
+def _future_dates_from_history(price_df: pd.DataFrame, steps: int, interval: str = "1d") -> pd.DatetimeIndex:
+    """Build future display dates for forecast charts."""
+    dates = pd.to_datetime(price_df.get("Date"), errors="coerce").dropna()
+    if dates.empty:
+        start = pd.Timestamp.today().normalize()
+    else:
+        start = dates.max().normalize()
+
+    interval = str(interval).lower().strip()
+    if interval == "1wk":
+        return pd.date_range(start=start + pd.offsets.Week(1), periods=int(steps), freq="W-FRI")
+    return pd.bdate_range(start=start + pd.offsets.BDay(1), periods=int(steps))
+
+
+def make_price_forecast_chart(
+    price_df: pd.DataFrame,
+    percentiles: pd.DataFrame,
+    ticker: str,
+    interval: str = "1d",
+    lookback: int = 252,
+) -> go.Figure:
+    """Plot historical close price with a forward-looking forecast range.
+
+    This chart is intentionally product-facing: it shows where price has been,
+    the latest close, and the simulated expected range going forward. It avoids
+    model probability noise and is meant for the Prediction tab.
+    """
+    history = price_df.copy()
+    history["Date"] = pd.to_datetime(history["Date"], errors="coerce")
+    history["Close"] = pd.to_numeric(history["Close"], errors="coerce")
+    history = history.dropna(subset=["Date", "Close"]).sort_values("Date")
+    if lookback and lookback > 0:
+        history = history.tail(int(lookback))
+
+    forecast = percentiles.copy() if percentiles is not None else pd.DataFrame()
+    for col in ["p10", "p25", "p50", "p75", "p90"]:
+        if col in forecast.columns:
+            forecast[col] = pd.to_numeric(forecast[col], errors="coerce")
+    if "step" not in forecast.columns:
+        forecast["step"] = range(1, len(forecast) + 1)
+    forecast = forecast.dropna(subset=["p10", "p50", "p90"]) if {"p10", "p50", "p90"}.issubset(forecast.columns) else pd.DataFrame()
+
+    fig = go.Figure()
+    if not history.empty:
+        fig.add_trace(
+            go.Scatter(
+                x=history["Date"],
+                y=history["Close"],
+                mode="lines",
+                name="Historical close",
+                hovertemplate="%{x|%Y-%m-%d}<br>Close: $%{y:,.2f}<extra></extra>",
+            )
+        )
+        latest_date = history["Date"].iloc[-1]
+        latest_close = float(history["Close"].iloc[-1])
+        fig.add_trace(
+            go.Scatter(
+                x=[latest_date],
+                y=[latest_close],
+                mode="markers",
+                name="Latest close",
+                marker={"size": 10},
+                hovertemplate="Latest close<br>%{x|%Y-%m-%d}<br>$%{y:,.2f}<extra></extra>",
+            )
+        )
+    else:
+        latest_date = pd.Timestamp.today().normalize()
+
+    if not forecast.empty:
+        future_dates = _future_dates_from_history(price_df, len(forecast), interval=interval)
+        forecast = forecast.iloc[: len(future_dates)].copy()
+        forecast["Date"] = future_dates[: len(forecast)]
+
+        # Add high bound first and low bound second with fill between them.
+        fig.add_trace(
+            go.Scatter(
+                x=forecast["Date"],
+                y=forecast["p90"],
+                mode="lines",
+                name="Optimistic range",
+                line={"width": 0},
+                hovertemplate="%{x|%Y-%m-%d}<br>90th percentile: $%{y:,.2f}<extra></extra>",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=forecast["Date"],
+                y=forecast["p10"],
+                mode="lines",
+                name="Likely range",
+                fill="tonexty",
+                line={"width": 0},
+                hovertemplate="%{x|%Y-%m-%d}<br>10th percentile: $%{y:,.2f}<extra></extra>",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=forecast["Date"],
+                y=forecast["p50"],
+                mode="lines+markers",
+                name="Expected path",
+                hovertemplate="%{x|%Y-%m-%d}<br>Median forecast: $%{y:,.2f}<extra></extra>",
+            )
+        )
+
+        if not history.empty:
+            fig.add_vline(x=str(history["Date"].iloc[-1].date()), line_width=1, line_dash="dash")
+
+    fig.update_layout(
+        title=f"{ticker.upper()} Price History and Forecast Range",
+        xaxis_title="Date",
+        yaxis_title="Price",
+        height=560,
+        hovermode="x unified",
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "left", "x": 0},
+    )
+    return fig

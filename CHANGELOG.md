@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.1 - Forecast-first Prediction UX
+
+### Changed
+- Redesigned the Prediction tab around a user-facing price forecast instead of a noisy historical probability diagnostic.
+- Added a historical close + future forecast range chart using Monte Carlo percentiles.
+- Added plain-English forecast copy with current close, median forecast, likely range, confidence, and reasoning.
+- Translated RSI, MACD, and volatility into beginner-friendly momentum/trend/risk labels.
+- Moved the simple split probability chart into an Advanced diagnostics expander.
+
+### Added
+- Added `make_price_forecast_chart()` for displaying historical close price plus expected future range.
+- Added forecast UX documentation in `docs/FORECAST_UX.md`.
+
 
 ## 1.4.0 - API Backend Foundation
 
