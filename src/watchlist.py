@@ -173,7 +173,7 @@ def scan_single_ticker(
         "close_sma20_ratio": close_sma20_ratio,
         "base_signal": prediction["signal"],
         "base_up_probability": float(prediction["up_probability"]),
-        "sentiment_label": sentiment_summary.get("overall_label", "Unavailable"),
+        "sentiment_label": sentiment_summary.get("display_label", sentiment_summary.get("overall_label", "Unavailable")),
         "sentiment_score": sentiment_score,
         "headline_count": int(sentiment_summary.get("headline_count", 0) or 0),
         "sentiment_source": news_meta.get("source_used", "unknown"),

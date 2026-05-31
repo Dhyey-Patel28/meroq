@@ -66,6 +66,23 @@ NEGATIVE_TERMS = {
 NEGATIONS = {"not", "no", "never", "without", "hardly", "barely", "isn't", "wasn't", "aren't", "don't", "doesn't"}
 INTENSIFIERS = {"very", "much", "strongly", "significantly", "sharp", "sharply", "record"}
 
+TARGET_NEGATIVE_PATTERNS = [
+    ("risk-language", r"\b(risky|risk|risks|avoid|caution|cautious|warning|warns|concern|concerns|bearish|underperform|sell)\b"),
+    ("negative-price-action", r"\b(falls|fell|falling|drops|dropped|declines|slumps|plunges|slides|sinks|tumbles)\b"),
+    ("negative-fundamental-event", r"\b(miss|misses|missed|cuts|cut|lowers|lowered|downgrade|downgraded|lawsuit|probe|investigation|recall|fraud|loss|losses|weak|weakness|headwinds)\b"),
+    ("buy-alternative-framing", r"\b(stock|stocks|name|company)\s+to\s+buy\s+instead\b|\bbuy\s+instead\b|\binstead\s+of\b"),
+]
+
+TARGET_POSITIVE_PATTERNS = [
+    ("positive-analyst-action", r"\b(upgrade|upgraded|raises?\s+(?:price\s+target|rating)|outperform|buy\s+rating|initiates?\s+at\s+buy)\b"),
+    ("positive-fundamental-event", r"\b(beats?|beat|raises?\s+guidance|record\s+(?:revenue|profit|sales)|strong\s+(?:earnings|quarter|demand)|profit\s+jumps?|revenue\s+grows?)\b"),
+    ("positive-price-action", r"\b(rallies|rally|surges|jumps|gains|soars|breaks?\s+out|hits?\s+record)\b"),
+]
+
+CAUTIONARY_LABEL = "Cautionary"
+IRRELEVANT_LABEL = "Irrelevant"
+UNCERTAIN_LABEL = "Uncertain"
+
 
 @dataclass
 class SentimentResult:
@@ -894,6 +911,139 @@ def score_text(text: str, engine: str = "lightweight") -> SentimentResult:
     return score_text_lightweight(text)
 
 
+def _keyword_hits(text: str, patterns: list[tuple[str, str]]) -> list[str]:
+    return [tag for tag, pattern in patterns if re.search(pattern, text, flags=re.IGNORECASE)]
+
+
+def _target_mentioned(text: str, ticker: str, company_name: str, aliases: list[str]) -> bool:
+    profile = {
+        "ticker": ticker,
+        "company_name": company_name,
+        "aliases": aliases or ([company_name] if company_name else []),
+        "ambiguous_ticker": str(ticker).upper() in AMBIGUOUS_TICKERS or len(str(ticker)) <= 2,
+    }
+    row = {"title": text, "summary": "", "url": ""}
+    return score_news_relevance(row, profile) >= 3.0
+
+
+def apply_target_aware_sentiment(row: dict[str, Any], base: SentimentResult) -> dict[str, Any]:
+    """Correct generic sentiment into ticker-targeted financial sentiment.
+
+    Generic sentiment often mistakes phrases such as "X is risky and one stock to
+    buy instead" as positive because the words "stock to buy" are positive in
+    isolation. This layer asks the product question instead: is the headline
+    positive or negative for the selected ticker/company?
+    """
+    title = str(row.get("title", "") or "")
+    summary = str(row.get("summary", "") or "")
+    text = f"{title}. {summary}".strip()
+    compact = _compact_company_phrase(text)
+    ticker = str(row.get("ticker", "") or "").upper().strip()
+    company_name = str(row.get("company_name", "") or ticker).strip()
+    aliases_text = str(row.get("company_aliases", "") or "")
+    aliases = [part.strip() for part in aliases_text.split(",") if part.strip()]
+    if company_name and company_name not in aliases:
+        aliases.insert(0, company_name)
+
+    relevance_score = float(row.get("relevance_score", 0.0) or 0.0)
+    if relevance_score >= 6.0:
+        relevance_label = "High"
+    elif relevance_score >= 4.0:
+        relevance_label = "Medium"
+    elif _target_mentioned(text, ticker, company_name, aliases):
+        relevance_label = "Medium"
+        relevance_score = max(relevance_score, 4.0)
+    else:
+        relevance_label = "Low"
+
+    reason_tags: list[str] = []
+    negative_hits = _keyword_hits(text, TARGET_NEGATIVE_PATTERNS)
+    positive_hits = _keyword_hits(text, TARGET_POSITIVE_PATTERNS)
+
+    # Target-aware inversion: the selected company is explicitly framed as the
+    # thing to avoid, while another stock is the one to buy instead.
+    buy_instead = "buy instead" in compact or "stock to buy instead" in compact or "stocks to buy instead" in compact
+    target_name_near_risk = False
+    for alias in aliases + ([ticker] if ticker else []):
+        alias_key = _compact_company_phrase(alias)
+        if not alias_key:
+            continue
+        pattern = rf"{re.escape(alias_key)}.{{0,80}}\b(risky|risk|avoid|caution|bearish|underperform|sell|warning)\b"
+        if re.search(pattern, compact):
+            target_name_near_risk = True
+            break
+
+    target_label = base.label
+    score = float(base.score)
+    confidence = float(base.confidence)
+    explanation = "Generic financial sentiment score accepted."
+
+    if relevance_label == "Low":
+        target_label = IRRELEVANT_LABEL
+        score = 0.0
+        confidence = min(confidence, 0.35)
+        reason_tags = ["low-target-relevance"]
+        explanation = "Headline did not strongly match the selected company, so it is treated as low-relevance context."
+    elif buy_instead and (target_name_near_risk or "risk-language" in negative_hits):
+        target_label = CAUTIONARY_LABEL
+        score = min(score, -0.55)
+        confidence = max(confidence, 0.82)
+        reason_tags = ["buy-alternative-framing", "risk-language"]
+        explanation = "The selected company is described as risky while the headline recommends another stock instead."
+    elif negative_hits and not positive_hits:
+        target_label = CAUTIONARY_LABEL
+        score = min(score, -0.35)
+        confidence = max(confidence, 0.68)
+        reason_tags = negative_hits
+        explanation = "Headline contains cautionary language tied to the selected company."
+    elif positive_hits and not negative_hits:
+        target_label = "Positive"
+        score = max(score, 0.30)
+        confidence = max(confidence, 0.62)
+        reason_tags = positive_hits
+        explanation = "Headline contains positive event language tied to the selected company."
+    elif positive_hits and negative_hits:
+        # Mixed headlines are common. Avoid pretending precision when both sides appear.
+        if score <= -0.12:
+            target_label = CAUTIONARY_LABEL
+        elif score >= 0.12:
+            target_label = "Positive"
+        else:
+            target_label = UNCERTAIN_LABEL
+        confidence = min(max(confidence, 0.55), 0.72)
+        reason_tags = list(dict.fromkeys(negative_hits + positive_hits + ["mixed-event-language"]))
+        explanation = "Headline contains both positive and cautionary event language, so confidence is capped."
+    elif abs(score) < 0.12:
+        target_label = "Neutral"
+        reason_tags = ["no-strong-directional-event"]
+        explanation = "No strong target-specific financial event language was detected."
+
+    # Keep the existing three-class sentiment_label for downstream scoring, but
+    # expose a richer target_sentiment_label for the UI and diagnostics.
+    normalized_label = target_label
+    if target_label in {CAUTIONARY_LABEL, "Negative"}:
+        normalized_label = "Negative"
+    elif target_label == "Positive":
+        normalized_label = "Positive"
+    elif target_label in {IRRELEVANT_LABEL, UNCERTAIN_LABEL}:
+        normalized_label = "Neutral"
+
+    return {
+        "sentiment_label": normalized_label,
+        "sentiment_score": float(max(-1.0, min(1.0, score))),
+        "confidence": float(max(0.0, min(0.98, confidence))),
+        "target_sentiment_label": target_label,
+        "target_relevance_label": relevance_label,
+        "target_relevance_score": float(relevance_score),
+        "reason_tags": ", ".join(dict.fromkeys(reason_tags)),
+        "sentiment_explanation": explanation,
+        "target_company": company_name or ticker,
+        "target_ticker": ticker,
+        "base_sentiment_label": base.label,
+        "base_sentiment_score": float(base.score),
+    }
+
+
 def analyze_news_sentiment(news_df: pd.DataFrame, engine: str = "lightweight") -> pd.DataFrame:
     """Analyze a DataFrame of news rows and return headline-level sentiment."""
     if news_df is None or news_df.empty:
@@ -907,14 +1057,19 @@ def analyze_news_sentiment(news_df: pd.DataFrame, engine: str = "lightweight") -
         result = score_text(text, engine=engine)
 
         enriched = row.to_dict()
+        target_adjusted = apply_target_aware_sentiment(enriched, result)
+        adjusted_score = float(target_adjusted["sentiment_score"])
+        positive_probability = max(0.0, adjusted_score)
+        negative_probability = max(0.0, -adjusted_score)
+        neutral_probability = max(0.0, 1.0 - positive_probability - negative_probability)
+        total_probability = positive_probability + neutral_probability + negative_probability or 1.0
+
         enriched.update(
             {
-                "sentiment_label": result.label,
-                "sentiment_score": result.score,
-                "confidence": result.confidence,
-                "positive_probability": result.positive_probability,
-                "neutral_probability": result.neutral_probability,
-                "negative_probability": result.negative_probability,
+                **target_adjusted,
+                "positive_probability": float(positive_probability / total_probability),
+                "neutral_probability": float(neutral_probability / total_probability),
+                "negative_probability": float(negative_probability / total_probability),
                 "sentiment_engine": result.engine,
                 "sentiment_engine_detail": result.engine_detail,
                 "model_agreement": result.agreement,
@@ -929,33 +1084,59 @@ def analyze_news_sentiment(news_df: pd.DataFrame, engine: str = "lightweight") -
 
 
 def summarize_sentiment(sentiment_df: pd.DataFrame) -> dict[str, Any]:
-    """Aggregate headline sentiment into a dashboard summary."""
+    """Aggregate headline sentiment into a dashboard summary.
+
+    The headline-level DataFrame may include target-aware labels such as
+    Cautionary, Irrelevant, and Uncertain. Aggregation uses only target-relevant
+    rows when available so unrelated or ambiguous headlines do not distort the
+    ticker-level overlay.
+    """
     if sentiment_df is None or sentiment_df.empty or "sentiment_label" not in sentiment_df.columns:
         return {
             "available": False,
             "headline_count": 0,
+            "scored_headline_count": 0,
             "overall_label": "No news",
             "average_score": 0.0,
             "positive_count": 0,
             "neutral_count": 0,
             "negative_count": 0,
+            "cautionary_count": 0,
+            "irrelevant_count": 0,
+            "uncertain_count": 0,
             "confidence": 0.0,
             "agreement": None,
             "engine": "none",
             "source_used": "none",
         }
 
-    count = len(sentiment_df)
-    labels = sentiment_df["sentiment_label"].astype(str)
+    data = sentiment_df.copy()
+    headline_count = len(data)
+    if "target_sentiment_label" in data.columns:
+        target_labels_all = data["target_sentiment_label"].astype(str)
+        irrelevant_mask = target_labels_all.isin([IRRELEVANT_LABEL, UNCERTAIN_LABEL])
+        scored = data.loc[~irrelevant_mask].copy()
+        if scored.empty:
+            scored = data.copy()
+    else:
+        target_labels_all = data["sentiment_label"].astype(str)
+        scored = data.copy()
+
+    count = len(scored)
+    labels = scored["sentiment_label"].astype(str)
+    target_labels = scored.get("target_sentiment_label", labels).astype(str)
     positive_count = int((labels == "Positive").sum())
     neutral_count = int((labels == "Neutral").sum())
     negative_count = int((labels == "Negative").sum())
-    average_score = float(pd.to_numeric(sentiment_df["sentiment_score"], errors="coerce").fillna(0.0).mean())
-    confidence = float(pd.to_numeric(sentiment_df["confidence"], errors="coerce").fillna(0.0).mean())
+    cautionary_count = int((target_labels_all == CAUTIONARY_LABEL).sum())
+    irrelevant_count = int((target_labels_all == IRRELEVANT_LABEL).sum())
+    uncertain_count = int((target_labels_all == UNCERTAIN_LABEL).sum())
+    average_score = float(pd.to_numeric(scored["sentiment_score"], errors="coerce").fillna(0.0).mean()) if count else 0.0
+    confidence = float(pd.to_numeric(scored["confidence"], errors="coerce").fillna(0.0).mean()) if count else 0.0
 
     agreement_value = None
-    if "model_agreement" in sentiment_df.columns:
-        agreements = pd.to_numeric(sentiment_df["model_agreement"], errors="coerce").dropna()
+    if "model_agreement" in scored.columns:
+        agreements = pd.to_numeric(scored["model_agreement"], errors="coerce").dropna()
         if not agreements.empty:
             agreement_value = float(agreements.mean())
 
@@ -966,26 +1147,35 @@ def summarize_sentiment(sentiment_df: pd.DataFrame) -> dict[str, Any]:
     else:
         overall_label = "Neutral"
 
+    display_label = overall_label
+    if overall_label == "Negative" and cautionary_count >= max(1, negative_count // 2):
+        display_label = CAUTIONARY_LABEL
+
     engine = "mixed"
-    if "sentiment_engine" in sentiment_df.columns and not sentiment_df["sentiment_engine"].dropna().empty:
-        engines = sentiment_df["sentiment_engine"].dropna().astype(str).unique().tolist()
+    if "sentiment_engine" in scored.columns and not scored["sentiment_engine"].dropna().empty:
+        engines = scored["sentiment_engine"].dropna().astype(str).unique().tolist()
         engine = engines[0] if len(engines) == 1 else "mixed"
 
     source_used = "mixed"
-    if "source" in sentiment_df.columns and not sentiment_df["source"].dropna().empty:
-        sources = sentiment_df["source"].dropna().astype(str).unique().tolist()
+    if "source" in scored.columns and not scored["source"].dropna().empty:
+        sources = scored["source"].dropna().astype(str).unique().tolist()
         source_used = sources[0] if len(sources) == 1 else "mixed"
 
     return {
         "available": True,
-        "headline_count": count,
+        "headline_count": headline_count,
+        "scored_headline_count": count,
         "average_score": average_score,
         "positive_count": positive_count,
         "neutral_count": neutral_count,
         "negative_count": negative_count,
+        "cautionary_count": cautionary_count,
+        "irrelevant_count": irrelevant_count,
+        "uncertain_count": uncertain_count,
         "positive_ratio": positive_count / count if count else 0.0,
         "negative_ratio": negative_count / count if count else 0.0,
         "overall_label": overall_label,
+        "display_label": display_label,
         "confidence": confidence,
         "agreement": agreement_value,
         "engine": engine,
@@ -998,14 +1188,17 @@ def sentiment_context_sentence(summary: dict[str, Any]) -> str:
     if not summary.get("available"):
         return "No recent headlines were returned for this ticker. Meroq can still run price, model, and risk analysis."
 
-    label = summary.get("overall_label", "Neutral").lower()
+    label = summary.get("display_label", summary.get("overall_label", "Neutral")).lower()
     agreement = summary.get("agreement")
     agreement_text = f" Average model agreement is {agreement:.1%}." if agreement is not None else ""
+    scored_count = summary.get("scored_headline_count", summary.get("headline_count", 0))
+    excluded = int(summary.get("irrelevant_count", 0) or 0) + int(summary.get("uncertain_count", 0) or 0)
+    excluded_text = f" {excluded} low-relevance/uncertain headline(s) were excluded from the overlay." if excluded else ""
     return (
-        f"Recent headline sentiment is **{label}** across {summary['headline_count']} headlines. "
+        f"Recent target-aware headline sentiment is **{label}** across {scored_count} scored headlines. "
         f"Average sentiment score is {summary['average_score']:+.2f}, with "
         f"{summary['positive_count']} positive, {summary['neutral_count']} neutral, and "
-        f"{summary['negative_count']} negative headlines.{agreement_text}"
+        f"{summary['negative_count']} cautionary/negative headlines.{excluded_text}{agreement_text}"
     )
 
 

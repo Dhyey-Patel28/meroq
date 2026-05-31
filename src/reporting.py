@@ -83,7 +83,7 @@ def build_insight_report(
     headline_count = None
     sentiment_confidence = None
     if sentiment_summary and sentiment_summary.get("available"):
-        sentiment_label = _safe(sentiment_summary.get("overall_label"))
+        sentiment_label = _safe(sentiment_summary.get("display_label", sentiment_summary.get("overall_label")))
         sentiment_score = sentiment_summary.get("average_score")
         headline_count = sentiment_summary.get("headline_count")
         sentiment_confidence = sentiment_summary.get("confidence")
