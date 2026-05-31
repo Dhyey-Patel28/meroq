@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { GradeBadge } from "@/components/GradeBadge";
 import { NewsCard } from "@/components/NewsCard";
 import { ProbabilityBar } from "@/components/ProbabilityBar";
 import { StatusPill } from "@/components/StatusPill";
@@ -118,7 +119,12 @@ export function StockDetailModal({
             <h2 style={{ marginTop: 0 }}>{ticker}</h2>
             <p className="muted small">Click outside the panel or press Esc to close.</p>
           </div>
-          {summary?.final_signal ? <StatusPill label={String(summary.final_signal)} tone={toneFromText(summary.final_signal)} /> : null}
+          {summary ? (
+            <div className="badge-row">
+              <GradeBadge grade={summary.meroq_grade} label={summary.meroq_grade_label} compact />
+              {summary.final_signal ? <StatusPill label={String(summary.final_signal)} tone={toneFromText(summary.final_signal)} /> : null}
+            </div>
+          ) : null}
         </div>
 
         {loading ? <LoadingState label={`Loading ${ticker}…`} /> : null}
@@ -136,8 +142,8 @@ export function StockDetailModal({
                 <p className="metric-value">{formatPct(summary.final_up_probability ?? summary.base_up_probability)}</p>
               </section>
               <section className="metric-card">
-                <p className="metric-label">Meroq score</p>
-                <p className="metric-value">{formatNumber(summary.meroq_score ?? baseRow?.meroq_score)}</p>
+                <p className="metric-label">Meroq Grade</p>
+                <p className="metric-value"><GradeBadge grade={summary.meroq_grade ?? baseRow?.meroq_grade} label={summary.meroq_grade_label ?? baseRow?.meroq_grade_label} /></p>
               </section>
               <section className="metric-card">
                 <p className="metric-label">Risk read</p>
@@ -150,6 +156,16 @@ export function StockDetailModal({
             <section className="card subtle-card">
               <p className="status-label">Plain-English read</p>
               <p className="plain-summary">{plainRead(summary, riskSummary)}</p>
+            </section>
+
+            <section className="card grade-breakdown-card">
+              <p className="status-label">Grade breakdown</p>
+              <div className="grade-component-grid">
+                <span><GradeBadge grade={summary.momentum_grade} compact /> Momentum</span>
+                <span><GradeBadge grade={summary.risk_grade} compact /> Risk</span>
+                <span><GradeBadge grade={summary.sentiment_grade} compact /> Sentiment</span>
+                <span><GradeBadge grade={summary.model_confidence_grade} compact /> Model confidence</span>
+              </div>
             </section>
 
             <div className="grid cols-3 align-start">

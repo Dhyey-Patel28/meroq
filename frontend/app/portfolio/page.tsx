@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { DataTable } from "@/components/DataTable";
 import { DonutChart } from "@/components/DonutChart";
+import { GradeBadge } from "@/components/GradeBadge";
 import { ErrorBox, LoadingState } from "@/components/StateBlocks";
 import { MetricCard } from "@/components/MetricCard";
 import { PageShell } from "@/components/PageShell";
@@ -15,6 +16,7 @@ const holdingColumns = [
   "latest_close",
   "final_signal",
   "final_up_probability",
+  "meroq_grade",
   "risk_label",
   "risk_loss_gt_5pct",
   "meroq_score",
@@ -122,6 +124,7 @@ export default function PortfolioPage() {
         <>
           <section className="grid cols-4" style={{ marginTop: 18 }}>
             <MetricCard label="Holdings" value={String(summary.holding_count ?? holdings.length)} />
+            <MetricCard label="Portfolio grade" value={<GradeBadge grade={summary.portfolio_grade} label={summary.portfolio_grade_label} />} helper={String(summary.portfolio_grade_label ?? "Research grade, not advice.")} />
             <MetricCard label="Weighted Meroq score" value={formatNumber(summary.weighted_meroq_score)} />
             <MetricCard label="Weighted up probability" value={formatPct(summary.weighted_up_probability)} />
             <MetricCard label="Downside exposure" value={formatPct(summary.weighted_downside_probability)} tone="warning" />

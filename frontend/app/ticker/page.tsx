@@ -5,6 +5,7 @@ import { DataTable } from "@/components/DataTable";
 import { DecisionPanel } from "@/components/DecisionPanel";
 import { ErrorBox, LoadingState } from "@/components/StateBlocks";
 import { ForecastBand } from "@/components/ForecastBand";
+import { GradeBadge } from "@/components/GradeBadge";
 import { MetricCard } from "@/components/MetricCard";
 import { NewsCard } from "@/components/NewsCard";
 import { PageShell } from "@/components/PageShell";
@@ -199,7 +200,12 @@ export default function TickerPage() {
               <p className="status-label">Current read</p>
               <h2>{summary ? `${String(summary.ticker)} outlook` : "Waiting for analysis"}</h2>
             </div>
-            {summary ? <StatusPill label={String(finalSignal)} tone={signalTone(finalSignal)} /> : null}
+            {summary ? (
+              <div className="badge-row">
+                <GradeBadge grade={summary.meroq_grade} label={summary.meroq_grade_label} compact />
+                <StatusPill label={String(finalSignal)} tone={signalTone(finalSignal)} />
+              </div>
+            ) : null}
           </div>
           {!summary && !error && !loading ? <p className="muted">Submit a ticker to see the concise signal, risk, and source-backed sentiment evidence.</p> : null}
           {loading ? <LoadingState label="Running ticker analysis..." /> : null}
@@ -219,6 +225,7 @@ export default function TickerPage() {
       {summary ? (
         <>
           <section className="grid cols-4" style={{ marginTop: 18 }}>
+            <MetricCard label="Meroq Grade" value={<GradeBadge grade={summary.meroq_grade} label={summary.meroq_grade_label} />} helper={String(summary.grade_summary ?? "Research grade, not advice.")} />
             <MetricCard label="Latest close" value={formatMoney(summary.latest_close)} helper={String(summary.latest_data_date ?? "")} />
             <MetricCard label="Base probability" value={formatPct(summary.base_up_probability)} info="The model-only up probability before recent-news sentiment is applied." />
             <MetricCard label="Adjusted probability" value={formatPct(summary.final_up_probability)} info="The final probability after the conservative sentiment overlay. It is still a research estimate, not a guarantee." />
@@ -230,6 +237,25 @@ export default function TickerPage() {
             <MetricCard label="Sentiment adjustment" value={formatSignedPctPoints(summary.sentiment_adjustment_pct_points)} info="How much recent-news sentiment tilted the model probability." />
             <MetricCard label="Positive return probability" value={formatPct(riskSummary?.probability_positive_return)} info="Monte Carlo estimate for ending above the current close over the selected horizon." />
             <MetricCard label="Loss > 5% probability" value={formatPct(riskSummary?.probability_loss_gt_5pct)} info="Monte Carlo estimate for a loss greater than 5% over the selected horizon." />
+          </section>
+
+
+          <section className="card grade-breakdown-card" style={{ marginTop: 18 }}>
+            <div className="card-heading-row">
+              <div>
+                <p className="status-label">Meroq Grades</p>
+                <h2>Component read</h2>
+              </div>
+              <GradeBadge grade={summary.meroq_grade} label={summary.meroq_grade_label} />
+            </div>
+            <p className="plain-summary">{String(summary.grade_summary ?? "Meroq Grade summarizes signal, risk, sentiment, momentum, and model confidence.")}</p>
+            <div className="grade-component-grid">
+              <span><GradeBadge grade={summary.momentum_grade} compact /> Momentum</span>
+              <span><GradeBadge grade={summary.risk_grade} compact /> Risk</span>
+              <span><GradeBadge grade={summary.sentiment_grade} compact /> Sentiment</span>
+              <span><GradeBadge grade={summary.model_confidence_grade} compact /> Model confidence</span>
+              <span><GradeBadge grade={summary.data_quality_grade} compact /> Data quality</span>
+            </div>
           </section>
 
           <DecisionPanel summary={summary} riskSummary={riskSummary} />

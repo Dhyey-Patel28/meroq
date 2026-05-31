@@ -20,6 +20,7 @@ const columns = [
   "latest_close",
   "final_signal",
   "final_up_probability",
+  "meroq_grade",
   "sentiment_label",
   "risk_label",
   "meroq_score",
@@ -353,6 +354,7 @@ export default function WatchlistPage() {
         <section className="grid cols-4" style={{ marginTop: 18 }}>
           <MetricCard label="Completed" value={String(summary.scanned)} helper="Rows returned so far" />
           <MetricCard label="Ready" value={String(summary.ready)} helper="Usable analyses" tone="positive" />
+          <MetricCard label="Top grade" value={String(sortedRows.find((row) => row.meroq_grade)?.meroq_grade ?? "N/A")} helper="Best currently ranked row" />
           <MetricCard label="Issues" value={String(summary.issues)} helper="Skipped or unavailable" tone={summary.issues ? "warning" : "neutral"} />
           <MetricCard label="Bullish" value={String(summary.bullish)} helper={`High risk names: ${summary.highRisk}`} />
         </section>

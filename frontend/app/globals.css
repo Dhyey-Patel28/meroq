@@ -1321,3 +1321,104 @@ code {
   font-weight: 800;
   text-transform: capitalize;
 }
+
+/* 1.9.1 Meroq Grades */
+.badge-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.grade-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  padding: 7px 11px;
+  background: #f8fafc;
+  color: var(--foreground);
+  white-space: nowrap;
+}
+
+.grade-badge strong {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 999px;
+  background: #111827;
+  color: #fff;
+  font-size: 0.98rem;
+  line-height: 1;
+}
+
+.grade-badge span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.grade-badge.compact {
+  gap: 4px;
+  padding: 4px 7px;
+}
+
+.grade-badge.compact strong {
+  min-width: 24px;
+  min-height: 24px;
+  font-size: 0.82rem;
+}
+
+.grade-badge.tone-positive {
+  background: var(--success-soft);
+  border-color: #bbf7d0;
+}
+
+.grade-badge.tone-positive strong {
+  background: var(--success);
+}
+
+.grade-badge.tone-warning {
+  background: var(--warning-soft);
+  border-color: #fde68a;
+}
+
+.grade-badge.tone-warning strong {
+  background: var(--warning);
+}
+
+.grade-badge.tone-negative {
+  background: var(--danger-soft);
+  border-color: #fecaca;
+}
+
+.grade-badge.tone-negative strong {
+  background: var(--danger);
+}
+
+.grade-breakdown-card {
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+
+.grade-component-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.grade-component-grid > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: #fff;
+  color: #334155;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
