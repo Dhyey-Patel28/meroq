@@ -80,7 +80,7 @@ function plainLanguageRead(summary: ApiRecord, riskSummary?: ApiRecord) {
   return `Meroq ${direction} with ${confidence.toLowerCase()} confidence. Recent news sentiment is ${sentiment.toLowerCase()}, and the current risk lens is ${risk.toLowerCase()}.${riskClause}`;
 }
 
-const headlineColumns = ["published_at", "publisher", "source", "sentiment_label", "sentiment_score", "confidence", "title", "url"];
+const headlineColumns = ["published_at", "publisher", "source", "target_relevance_label", "target_sentiment_label", "sentiment_score", "confidence", "reason_tags", "title", "url"];
 const suggestedTickers = ["AAPL", "MSFT", "NVDA", "SPY", "HOG", "PLAY"];
 
 export default function TickerPage() {
