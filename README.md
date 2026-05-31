@@ -1,9 +1,9 @@
 # Meroq
 
-> Release 1.8.7 adds watchlist cleanup controls, sortable/exportable tables, ticker copy actions, and portfolio CSV export while keeping the progressive scan and drill-down workflow intact.
+> Release 1.8.8 adds watchlist presets and ticker hygiene controls so large pasted lists can be cleaned, saved, reused, and scanned more safely.
 
 
-Current release: 1.8.7 — Watchlist cleanup controls and table exports.
+Current release: 1.8.8 — Watchlist presets and ticker hygiene.
 
 Meroq is a local market-intelligence project for stock movement research. It combines price features, machine-learning signals, news sentiment, Monte Carlo risk simulation, watchlist scanning, portfolio exposure views, a Streamlit dashboard, a FastAPI backend, and a growing Next.js frontend.
 
@@ -11,9 +11,9 @@ Meroq is a local market-intelligence project for stock movement research. It com
 
 ## Current release
 
-**1.8.7 — Watchlist cleanup controls and table exports**
+**1.8.8 — Watchlist presets and ticker hygiene**
 
-The Next.js frontend now supports sortable/exportable tables, watchlist result filters, copy actions for ready/issue tickers, and portfolio holdings CSV export. Streamlit remains the deepest research UI while the React/Next.js interface matures.
+The Next.js frontend now supports reusable watchlist presets, browser-local custom presets, input cleanup, duplicate detection, and scan-limit visibility before progressive scans begin. Streamlit remains the deepest research UI while the React/Next.js interface matures.
 
 ## Main capabilities
 
@@ -24,6 +24,7 @@ The Next.js frontend now supports sortable/exportable tables, watchlist result f
 - Company-aware news fetching and sentiment analysis
 - Sentiment-aware signal overlay
 - Watchlist intelligence with Meroq Score
+- Watchlist presets, input cleanup, and progressive scan controls
 - Portfolio risk and exposure view
 - Markdown/CSV reporting
 - FastAPI backend for reusable analysis endpoints
