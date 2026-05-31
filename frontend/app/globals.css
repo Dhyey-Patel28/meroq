@@ -1139,3 +1139,58 @@ code {
     padding: 18px;
   }
 }
+
+/* 1.8.7 result controls and table export polish */
+.table-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.compact-button {
+  padding: 9px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+}
+
+.sort-button {
+  appearance: none;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.sort-button:hover {
+  color: var(--foreground);
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.filter-chip {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 9px 13px;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.filter-chip:hover,
+.filter-chip.active {
+  border-color: #b7c2ff;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}

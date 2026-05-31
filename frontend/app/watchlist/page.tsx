@@ -55,6 +55,8 @@ export default function WatchlistPage() {
   const [loading, setLoading] = useState(false);
   const [currentTicker, setCurrentTicker] = useState("");
   const [selectedRow, setSelectedRow] = useState<ApiRecord | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"all" | "ready" | "issues" | "high-risk">("all");
+  const [copyMessage, setCopyMessage] = useState("");
   const stopRef = useRef(false);
 
   const summary = useMemo(() => buildSummary(rows), [rows]);
@@ -72,11 +74,33 @@ export default function WatchlistPage() {
     [rows],
   );
 
+  const filteredRows = useMemo(() => {
+    if (statusFilter === "ready") return sortedRows.filter((row) => String(row.status ?? "") === "ok");
+    if (statusFilter === "issues") return sortedRows.filter((row) => String(row.status ?? "") === "failed");
+    if (statusFilter === "high-risk") {
+      return sortedRows.filter((row) => String(row.risk_label ?? "").toLowerCase().includes("high"));
+    }
+    return sortedRows;
+  }, [sortedRows, statusFilter]);
+
+  const readyTickers = sortedRows.filter((row) => String(row.status ?? "") === "ok").map((row) => String(row.ticker));
+  const issueTickers = sortedRows.filter((row) => String(row.status ?? "") === "failed").map((row) => String(row.ticker));
+
   const top = sortedRows
     .filter((row) => String(row.status ?? "") === "ok")
     .slice(0, 3)
     .map((row) => String(row.ticker))
     .join(", ");
+
+  async function copyTickers(label: string, symbols: string[]) {
+    const value = symbols.join(",");
+    if (!value) {
+      setCopyMessage(`No ${label} tickers to copy.`);
+      return;
+    }
+    await navigator.clipboard.writeText(value);
+    setCopyMessage(`Copied ${symbols.length} ${label} ticker${symbols.length === 1 ? "" : "s"}.`);
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -84,6 +108,8 @@ export default function WatchlistPage() {
     setError("");
     setRows([]);
     setCurrentTicker("");
+    setCopyMessage("");
+    setStatusFilter("all");
     stopRef.current = false;
 
     const symbols = parseTickerList(tickers).slice(0, Math.max(1, maxTickers));
@@ -206,7 +232,57 @@ export default function WatchlistPage() {
         <section className="card callout-card" style={{ marginTop: 18 }}>
           <p className="status-label">Quick read</p>
           <h2>Highest-ranked ready names: {top || "Still loading"}</h2>
-          <p className="muted">Use the legend below instead of raw status text. Click any row to open a richer ticker modal.</p>
+          <p className="muted">Use filters for cleanup, export visible rows as CSV, or copy ready/issue tickers for the next scan.</p>
+        </section>
+      ) : null}
+
+      {rows.length ? (
+        <section className="card" style={{ marginTop: 18 }}>
+          <div className="card-heading-row">
+            <div>
+              <p className="status-label">Result controls</p>
+              <h2>Clean up this scan</h2>
+            </div>
+            {copyMessage ? <span className="muted small">{copyMessage}</span> : null}
+          </div>
+          <div className="filter-row" role="group" aria-label="Watchlist result filters">
+            {[
+              ["all", `All (${sortedRows.length})`],
+              ["ready", `Ready (${summary.ready})`],
+              ["issues", `Issues (${summary.issues})`],
+              ["high-risk", `High risk (${summary.highRisk})`],
+            ].map(([value, label]) => (
+              <button
+                className={`filter-chip ${statusFilter === value ? "active" : ""}`}
+                type="button"
+                key={value}
+                onClick={() => setStatusFilter(value as typeof statusFilter)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="button-row" style={{ marginTop: 14 }}>
+            <button className="secondary-button" type="button" onClick={() => copyTickers("ready", readyTickers)}>
+              Copy ready tickers
+            </button>
+            <button className="secondary-button" type="button" onClick={() => copyTickers("issue", issueTickers)}>
+              Copy issue tickers
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={!issueTickers.length}
+              onClick={() => {
+                setTickers(issueTickers.join(","));
+                setRows([]);
+                setStatusFilter("all");
+                setCopyMessage("Issue tickers loaded into the input for review.");
+              }}
+            >
+              Review issue tickers
+            </button>
+          </div>
         </section>
       ) : null}
 
@@ -219,11 +295,12 @@ export default function WatchlistPage() {
           {sortedRows.length ? <span className="muted small">Top score: {formatNumber(sortedRows[0]?.meroq_score)}</span> : null}
         </div>
         <DataTable
-          rows={sortedRows}
+          rows={filteredRows}
           columns={columns}
           searchPlaceholder="Search tickers, scores, signals, or issue notes…"
           onRowClick={(row) => setSelectedRow(row)}
           rowHint="Row details"
+          exportFilename="meroq-watchlist-scan.csv"
           legend={
             <div className="legend-row">
               <span className="legend-pill positive">▲ Bullish / positive</span>

@@ -170,6 +170,7 @@ export default function PortfolioPage() {
           searchPlaceholder="Search holdings, weights, signals, or risk…"
           onRowClick={(row) => setSelectedRow(row)}
           rowHint="Holding details"
+          exportFilename="meroq-portfolio-holdings.csv"
           legend={
             <div className="legend-row">
               <span className="legend-pill positive">▲ Constructive / lower concern</span>

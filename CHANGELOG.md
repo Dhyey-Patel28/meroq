@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.8.7 — Watchlist cleanup controls and table exports
+
+### Added
+- Added sortable table headers and CSV export support to frontend data tables.
+- Added watchlist result filters for all, ready, issue, and high-risk rows.
+- Added copy actions for ready and issue tickers so large scans are easier to clean up and rerun.
+- Added portfolio holdings CSV export through the shared frontend table component.
+
+### Changed
+- Watchlist scan results now separate cleanup actions from the main ranked table, keeping the table focused on decision support.
+- Bumped frontend package version to 0.3.4.
+
+### Notes
+- This release does not change model behavior or backend scoring. It improves frontend result management after long scans.
+
 ## 1.8.6 — Progressive watchlist UX and portfolio drill-down
 
 ### Added
