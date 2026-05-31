@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Iterable
 
 import numpy as np
+
+from src.grades import score_to_grade, grade_label
 import pandas as pd
 
 
@@ -127,10 +129,13 @@ def build_portfolio_view(scan_df: pd.DataFrame, weights_df: pd.DataFrame) -> tup
     weighted_meroq_score = float(holdings["weighted_meroq_score"].sum())
     holding_count = int(len(holdings))
 
+    portfolio_grade = score_to_grade(weighted_meroq_score)
     summary = {
         # Canonical public keys used by the UI, API, reports, and tests.
         "holding_count": holding_count,
         "weighted_meroq_score": weighted_meroq_score,
+        "portfolio_grade": portfolio_grade,
+        "portfolio_grade_label": grade_label(portfolio_grade),
         "total_weight": float(holdings["weight"].sum()),
         "weighted_up_probability": float(holdings["weighted_up_probability"].sum()),
         "weighted_downside_probability": float(holdings["weighted_downside_probability"].sum()),
@@ -160,6 +165,11 @@ def build_portfolio_view(scan_df: pd.DataFrame, weights_df: pd.DataFrame) -> tup
         "risk_label",
         "risk_loss_gt_5pct",
         "meroq_score",
+        "meroq_grade",
+        "momentum_grade",
+        "risk_grade",
+        "sentiment_grade",
+        "model_confidence_grade",
         "weighted_meroq_score",
     ]
     available = [col for col in display_order if col in holdings.columns]
@@ -200,6 +210,8 @@ def _empty_summary() -> dict:
         "positions": 0,
         "total_weight": 0.0,
         "weighted_meroq_score": 0.0,
+        "portfolio_grade": "N/A",
+        "portfolio_grade_label": "Unavailable",
         "portfolio_meroq_score": 0.0,
         "weighted_up_probability": 0.0,
         "weighted_downside_probability": 0.0,
@@ -222,6 +234,7 @@ def portfolio_summary_sentence(summary: dict) -> str:
     score = float(summary.get("weighted_meroq_score", summary.get("portfolio_meroq_score", 0.0)) or 0.0)
     return (
         f"The scanned portfolio has a {summary.get('portfolio_signal_label', 'Neutral').lower()} signal profile, "
+        f"a {summary.get('portfolio_grade', 'N/A')} portfolio grade, "
         f"a Meroq score of {score:.1f}/100, "
         f"weighted up probability of {float(summary.get('weighted_up_probability', 0.0)):.1%}, "
         f"and {summary.get('portfolio_risk_label', 'balanced risk').lower()}."
