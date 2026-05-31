@@ -16,9 +16,9 @@ from src.model import MODEL_LABELS, model_dependency_status
 from src.news_sentiment import NEWS_SOURCE_OPTIONS, SENTIMENT_ENGINE_OPTIONS
 from src.portfolio import build_portfolio_view, parse_portfolio_weights, portfolio_summary_sentence
 from src.services import SingleTickerAnalysisRequest, run_single_ticker_analysis
-from src.watchlist import scan_watchlist, summarize_watchlist_scan
+from src.watchlist import scan_single_ticker, scan_watchlist, summarize_watchlist_scan
 
-APP_VERSION = "1.8.4"
+APP_VERSION = "1.8.5"
 
 
 class TickerAnalysisPayload(BaseModel):
@@ -49,6 +49,25 @@ class WatchlistPayload(BaseModel):
     """Request payload for watchlist scanning."""
 
     tickers: list[str] = Field(default_factory=lambda: list(DEFAULT_WATCHLIST), examples=[["AAPL", "MSFT", "NVDA", "SPY"]])
+    period: str = "5y"
+    interval: str = "1d"
+    news_source: str = "all_configured"
+    sentiment_engine: str = "lightweight"
+    max_news_items: int = Field(10, ge=0, le=50)
+    days_back: int = Field(7, ge=1, le=90)
+    include_sentiment: bool = True
+    include_risk: bool = True
+    risk_horizon: int = Field(30, ge=5, le=252)
+    risk_paths: int = Field(300, ge=100, le=3000)
+    volatility_window: int = Field(60, ge=5, le=252)
+    drift_mode: str = "model_adjusted"
+    max_adjustment: float = Field(0.08, ge=0.0, le=0.20)
+
+
+class WatchlistTickerPayload(BaseModel):
+    """Request payload for one progressive watchlist ticker scan."""
+
+    ticker: str = Field(..., examples=["AAPL"])
     period: str = "5y"
     interval: str = "1d"
     news_source: str = "all_configured"
@@ -241,6 +260,51 @@ def create_app() -> FastAPI:
             include_risk=include_risk,
         )
         return analyze_ticker(payload)
+
+
+    @app.post("/watchlist/scan-one")
+    def scan_watchlist_ticker_endpoint(payload: WatchlistTickerPayload) -> dict[str, Any]:
+        """Scan one ticker and always return a row-shaped result.
+
+        This endpoint supports progressive watchlist UIs. A bad or delisted
+        symbol should not break the whole scan; the client can show a failed row
+        and keep moving through the remaining tickers.
+        """
+        symbol = str(payload.ticker).upper().strip()
+        if not symbol:
+            return {
+                "row": {
+                    "ticker": "",
+                    "status": "failed",
+                    "error": "Ticker cannot be empty.",
+                }
+            }
+
+        try:
+            row = scan_single_ticker(
+                ticker=symbol,
+                period=payload.period,
+                interval=payload.interval,
+                news_source=payload.news_source,
+                sentiment_engine=payload.sentiment_engine,
+                max_news_items=payload.max_news_items,
+                days_back=payload.days_back,
+                include_sentiment=payload.include_sentiment,
+                include_risk=payload.include_risk,
+                risk_horizon=payload.risk_horizon,
+                risk_paths=payload.risk_paths,
+                volatility_window=payload.volatility_window,
+                drift_mode=payload.drift_mode,
+                max_adjustment=payload.max_adjustment,
+            )
+        except Exception as exc:
+            row = {
+                "ticker": symbol,
+                "status": "failed",
+                "error": f"Unable to load data for {symbol}: {exc}",
+            }
+
+        return {"row": _sanitize(row)}
 
     @app.post("/watchlist/scan")
     def scan_watchlist_endpoint(payload: WatchlistPayload) -> dict[str, Any]:

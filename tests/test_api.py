@@ -55,6 +55,32 @@ def test_metadata_endpoint_has_defaults() -> None:
     assert "AAPL" in body["default_watchlist"]
 
 
+
+def test_watchlist_scan_one_returns_failed_row_without_raising(monkeypatch) -> None:
+    import api.main as main_module
+
+    def fake_scan_single_ticker(**kwargs):
+        raise ValueError("No data returned for ticker: BAD")
+
+    monkeypatch.setattr(main_module, "scan_single_ticker", fake_scan_single_ticker)
+
+    response = api_post(
+        "/watchlist/scan-one",
+        json={
+            "ticker": "BAD",
+            "period": "5y",
+            "interval": "1d",
+            "include_sentiment": False,
+            "include_risk": False,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["row"]["ticker"] == "BAD"
+    assert body["row"]["status"] == "failed"
+    assert "Unable to load data" in body["row"]["error"]
+
 def test_portfolio_endpoint_uses_ticker_first_weight_parser(monkeypatch) -> None:
     import api.main as main_module
 

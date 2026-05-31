@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.8.5 — Progressive watchlist scanning and branch workflow
+
+### Added
+- Added `POST /watchlist/scan-one` for single-ticker watchlist rows so clients can stream progress one ticker at a time.
+- Added progressive Next.js watchlist scanning that appends rows as each ticker finishes instead of waiting for the whole list.
+- Added failed-ticker rows with clear messages when a symbol cannot be downloaded or analyzed.
+- Added max-ticker control and stop-scan button to make large scans safer.
+- Added `docs/BRANCHING_WORKFLOW.md`, a pull request template, and optional `scripts/ship_pr.ps1` for feature-branch/PR-based releases.
+
+### Changed
+- Watchlist frontend now encourages focused scans and keeps invalid/delisted tickers from blocking the whole run.
+- Price downloads now attempt a bounded yfinance timeout and suppress noisy provider messages, returning clearer application errors.
+- Bumped API metadata to 1.8.5 and frontend package version to 0.3.3.
+
+### Notes
+- Large watchlists should still be run in smaller batches. This release improves feedback and cancellation; it does not make hundreds of live model/news/risk calls instant.
+
+
 ## 1.8.4 — Frontend HCD polish and CSS cleanup
 
 ### Added

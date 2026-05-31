@@ -98,3 +98,20 @@ When `return_details=true`, `POST /analysis/ticker` includes `details.risk_perce
 - `p90`: upside range.
 
 This is a visualization aid, not a guaranteed price forecast.
+
+
+## Progressive watchlist scanning
+
+`POST /watchlist/scan-one` analyzes one ticker and returns one row-shaped result:
+
+```json
+{
+  "ticker": "AAPL",
+  "period": "5y",
+  "interval": "1d",
+  "include_sentiment": true,
+  "include_risk": true
+}
+```
+
+The endpoint is designed for UI clients that want to append watchlist rows as each ticker completes. If a symbol cannot be downloaded or analyzed, the endpoint returns a failed row instead of failing the whole watchlist request.

@@ -61,6 +61,14 @@ export type PortfolioPayload = WatchlistPayload & {
   weights?: string;
 };
 
+export type WatchlistTickerPayload = Omit<WatchlistPayload, "tickers"> & {
+  ticker: string;
+};
+
+export type WatchlistTickerResponse = {
+  row: ApiRecord;
+};
+
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -99,6 +107,14 @@ export function analyzeTicker(payload: TickerAnalysisPayload) {
   });
 }
 
+export function scanWatchlistTicker(payload: WatchlistTickerPayload, signal?: AbortSignal) {
+  return apiFetch<WatchlistTickerResponse>("/watchlist/scan-one", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal,
+  });
+}
+
 export function scanWatchlist(payload: WatchlistPayload) {
   return apiFetch<{ summary: ApiRecord; rows: ApiRecord[] }>("/watchlist/scan", {
     method: "POST",
@@ -117,10 +133,16 @@ export function analyzePortfolio(payload: PortfolioPayload) {
 }
 
 export function parseTickerList(value: string): string[] {
+  const seen = new Set<string>();
   return value
     .split(/[\n,]+/)
     .map((item) => item.trim().toUpperCase())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((item) => {
+      if (seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
 }
 
 export function formatPct(value: unknown, decimals = 1) {
