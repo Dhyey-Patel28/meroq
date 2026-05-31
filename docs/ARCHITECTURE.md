@@ -48,3 +48,8 @@ Release 0.8.0 adds a separate sentiment modeling layer. The recent-news signal o
 ## Watchlist intelligence
 
 The watchlist layer runs the single-ticker analysis pipeline across a small universe and creates a ranked scan table. It uses a fast XGBoost model by default, optional recent-news sentiment, optional lightweight Monte Carlo risk metrics, and a transparent Meroq Score for triage. The watchlist scan is intended for 5–20 symbols on a local machine; larger universes should move to scheduled batch jobs and a stronger database-backed service layer.
+
+
+## API Boundary
+
+Release 1.4.0 introduces a FastAPI backend foundation. The Streamlit dashboard still uses local Python calls, but the reusable service layer can now also be reached through local HTTP endpoints. This keeps the current prototype productive while preparing for a future Next.js frontend.

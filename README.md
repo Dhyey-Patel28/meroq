@@ -6,7 +6,7 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**1.3.1 — Service layer with dataframe rendering stability**
+**Release 1.4.0 — Service layer with dataframe rendering stability**
 
 This release starts separating Meroq's analysis engine from the Streamlit interface:
 
@@ -213,3 +213,28 @@ Meroq includes a **Report** tab that generates a local Markdown report for the c
 
 Reports are generated locally in the browser session. They do not include API keys, `.env` values, SQLite databases, or local cache files.
 
+
+
+## Local API Backend
+
+Meroq also includes a local FastAPI backend for service-layer testing and future frontend migration.
+
+Run the API:
+
+```powershell
+python scripts/run_api.py --reload
+```
+
+Open the interactive docs:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Smoke test it from a second terminal:
+
+```powershell
+python scripts/api_smoke_test.py --ticker AAPL
+```
+
+The Streamlit app remains the primary UI. The API is a foundation for a future FastAPI + Next.js architecture.

@@ -1,5 +1,20 @@
 # Changelog
 
+
+## 1.4.0 - API Backend Foundation
+
+### Added
+- Added a local FastAPI application under `api/main.py`.
+- Added health, metadata, single-ticker analysis, watchlist scan, and portfolio analysis endpoints.
+- Added `scripts/run_api.py` for launching the API.
+- Added `scripts/api_smoke_test.py` for local API regression checks.
+- Added `docs/API.md` and `notebooks/10_api_service_foundation.ipynb`.
+
+### Changed
+- Added FastAPI and explicit Uvicorn dependencies to the unified `requirements.txt`.
+- Kept Streamlit as the primary UI while making Meroq easier to migrate to a future Next.js frontend.
+
+
 ## 1.3.1 — Streamlit dataframe rendering stability
 
 ### Fixed
