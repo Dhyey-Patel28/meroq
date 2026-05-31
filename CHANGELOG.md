@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.7.0 — Frontend migration scaffold
+
+### Added
+
+- Added a separate `frontend/` Next.js + TypeScript scaffold.
+- Added frontend pages for dashboard, ticker analysis, watchlist scan, and portfolio view.
+- Added a typed frontend API client in `frontend/lib/api.ts`.
+- Added reusable frontend components for metric cards, layout, backend status, and data tables.
+- Added `docs/FRONTEND_SCAFFOLD.md` to document local frontend setup.
+
+### Changed
+
+- Bumped FastAPI metadata version to 1.7.0.
+- Updated frontend migration documentation to reflect the new scaffold.
+- Added frontend build artifacts and local env files to `.gitignore`.
+
+### Notes
+
+- Streamlit remains the primary UI.
+- The Next.js app is an API-boundary proof of concept, not a full replacement yet.
+- Frontend dependencies are managed inside `frontend/package.json`, separate from Python `requirements.txt`.
+
 ## 1.6.1 — API test-client cleanup
 
 ### Fixed

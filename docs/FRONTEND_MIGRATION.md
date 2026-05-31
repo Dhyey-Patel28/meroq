@@ -107,3 +107,24 @@ POST /api/analyze-ticker
 
 Request body mirrors `SingleTickerAnalysisRequest`; response body can start from the `summary` object and add optional tables as separate endpoints.
 
+
+
+## Release 1.7.0 update
+
+Meroq now includes a `frontend/` scaffold using Next.js and TypeScript. It is a separate app that calls the local FastAPI backend.
+
+This is not a full UI migration. It is a proof-of-boundary step:
+
+- Streamlit remains the primary UI.
+- FastAPI remains the reusable backend boundary.
+- Next.js starts as a small product shell with ticker, watchlist, and portfolio pages.
+- The frontend intentionally avoids reproducing every chart until the API response shapes are stable.
+
+Run the scaffold:
+
+```powershell
+python scripts/run_api.py --reload
+cd frontend
+npm install
+npm run dev
+```

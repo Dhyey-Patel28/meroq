@@ -8,16 +8,17 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**Release 1.6.1 — API test-client cleanup**
+**Release 1.7.0 — Frontend migration scaffold**
 
-This release keeps the 1.6.0 CI workflow and removes the deprecated Starlette/FastAPI `TestClient` path from the API tests.
+This release adds a separate `frontend/` Next.js + TypeScript scaffold while keeping Streamlit as the main app.
 
-- Keeps `.github/workflows/ci.yml` for GitHub Actions.
-- Runs `python scripts/run_tests.py` locally and in CI.
-- Uses `httpx.ASGITransport` + `httpx.AsyncClient` for API tests instead of `fastapi.testclient.TestClient`.
-- Keeps API keys and live market/news calls out of the automated test path.
+- Keeps Streamlit as the primary research/product UI.
+- Keeps FastAPI as the backend boundary.
+- Adds a lightweight Next.js app with dashboard, ticker, watchlist, and portfolio pages.
+- Adds a typed frontend API client for the local FastAPI endpoints.
+- Documents how to run the API and frontend together.
 
-The Streamlit app remains the main product UI. The FastAPI service layer is the bridge for a future Next.js or React frontend.
+The frontend scaffold is intentionally small. It proves the migration path without forcing a full UI rewrite before the API contract is stable.
 
 ## Core capabilities
 
@@ -73,6 +74,7 @@ Read:
 
 - `docs/DEPLOYMENT.md` for local/public-demo guidance and secrets handling
 - `docs/FRONTEND_MIGRATION.md` for the Streamlit-to-FastAPI/Next.js migration plan
+- `docs/FRONTEND_SCAFFOLD.md` for the local Next.js scaffold
 - `docs/PORTFOLIO_RISK.md` for the portfolio exposure view
 - `docs/QA_AUDIT.md` for senior QA findings and fixes
 - `docs/CI.md` for GitHub Actions CI behavior and local test commands
@@ -157,12 +159,44 @@ Download Hugging Face models ahead of time:
 python scripts/download_hf_models.py
 ```
 
+
+## Run the Next.js frontend scaffold
+
+The Next.js frontend is optional. Start the FastAPI backend first:
+
+```powershell
+python scripts/run_api.py --reload
+```
+
+Then run the frontend from a second terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+Streamlit remains the main UI:
+
+```powershell
+python -m streamlit run app.py
+```
+
 ## Project layout
 
 ```text
 meroq/
 ├── app.py
 ├── requirements.txt
+├── api/
+├── frontend/
+├── tests/
 ├── scripts/
 │   ├── bootstrap_watchlist.py
 │   ├── refresh_data.py

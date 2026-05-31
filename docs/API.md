@@ -67,3 +67,24 @@ python scripts/run_tests.py
 The test suite focuses on deterministic API and portfolio logic. Full live
 data-provider workflows are handled through smoke-test scripts because they
 can be slower and network-dependent.
+
+
+## Frontend scaffold
+
+Release 1.7.0 adds a small Next.js app under `frontend/` that calls these API endpoints during local development.
+
+Start the API:
+
+```bash
+python scripts/run_api.py --reload
+```
+
+Start the frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The API CORS defaults already allow `http://localhost:3000` and `http://127.0.0.1:3000`.
