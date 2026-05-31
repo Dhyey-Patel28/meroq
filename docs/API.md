@@ -105,3 +105,8 @@ This is a visualization aid, not a guaranteed price forecast.
 ### `POST /watchlist/scan-one`
 
 Scans one ticker at a time for progressive frontend loading. It always returns a `row` object. Successful rows contain the normal watchlist fields. Failed rows return `status: failed` and a user-facing `error` message so the frontend can keep scanning other symbols.
+
+
+## Meroq grade fields
+
+Ticker, watchlist, and portfolio responses may include grade fields such as `meroq_grade`, `meroq_grade_label`, `momentum_grade`, `risk_grade`, `sentiment_grade`, `model_confidence_grade`, and `data_quality_grade`. These are local research labels for scanning and triage, not buy/sell recommendations.
