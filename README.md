@@ -8,14 +8,14 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**Release 1.6.0 — GitHub Actions CI**
+**Release 1.6.1 — API test-client cleanup**
 
-This release adds automated CI so the lightweight regression suite runs on every push and pull request to `main`:
+This release keeps the 1.6.0 CI workflow and removes the deprecated Starlette/FastAPI `TestClient` path from the API tests.
 
-- Adds `.github/workflows/ci.yml` for GitHub Actions.
-- Runs `python scripts/run_tests.py` in CI.
+- Keeps `.github/workflows/ci.yml` for GitHub Actions.
+- Runs `python scripts/run_tests.py` locally and in CI.
+- Uses `httpx.ASGITransport` + `httpx.AsyncClient` for API tests instead of `fastapi.testclient.TestClient`.
 - Keeps API keys and live market/news calls out of the automated test path.
-- Documents local testing, CI behavior, and secrets rules.
 
 The Streamlit app remains the main product UI. The FastAPI service layer is the bridge for a future Next.js or React frontend.
 

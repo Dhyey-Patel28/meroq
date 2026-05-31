@@ -36,6 +36,14 @@ python scripts/api_smoke_test.py --ticker AAPL
 python scripts/news_smoke_test.py --ticker AAPL --source all_configured --engine lightweight --force-refresh
 ```
 
+
+## API test client strategy
+
+API endpoint tests call the FastAPI app directly through `httpx.ASGITransport` and `httpx.AsyncClient`.
+This avoids the deprecated Starlette/FastAPI `TestClient` compatibility path while keeping the tests fully local and fast.
+
+The app currently has no custom startup/shutdown lifespan handlers. If that changes later, add an ASGI lifespan manager to the API test helper.
+
 ## Recommended pre-commit checklist
 
 ```bash

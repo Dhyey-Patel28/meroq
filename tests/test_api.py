@@ -1,15 +1,37 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
+import asyncio
+from typing import Any
+
+import httpx
 
 from api.main import create_app
 
 
-client = TestClient(create_app())
+APP = create_app()
+
+
+async def _request(method: str, path: str, **kwargs: Any) -> httpx.Response:
+    """Call the FastAPI app directly through ASGI without Starlette TestClient.
+
+    This avoids the deprecated Starlette/FastAPI TestClient compatibility path
+    while keeping tests fast and fully local.
+    """
+    transport = httpx.ASGITransport(app=APP)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        return await client.request(method, path, **kwargs)
+
+
+def api_get(path: str, **kwargs: Any) -> httpx.Response:
+    return asyncio.run(_request("GET", path, **kwargs))
+
+
+def api_post(path: str, **kwargs: Any) -> httpx.Response:
+    return asyncio.run(_request("POST", path, **kwargs))
 
 
 def test_health_endpoint() -> None:
-    response = client.get("/health")
+    response = api_get("/health")
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
@@ -17,7 +39,7 @@ def test_health_endpoint() -> None:
 
 
 def test_root_endpoint_points_to_docs() -> None:
-    response = client.get("/")
+    response = api_get("/")
     assert response.status_code == 200
     body = response.json()
     assert body["docs"] == "/docs"
@@ -25,7 +47,7 @@ def test_root_endpoint_points_to_docs() -> None:
 
 
 def test_metadata_endpoint_has_defaults() -> None:
-    response = client.get("/metadata")
+    response = api_get("/metadata")
     assert response.status_code == 200
     body = response.json()
     assert "models" in body
@@ -78,7 +100,7 @@ def test_portfolio_endpoint_uses_ticker_first_weight_parser(monkeypatch) -> None
 
     monkeypatch.setattr(main_module, "scan_watchlist", fake_scan_watchlist)
 
-    response = client.post(
+    response = api_post(
         "/portfolio/analyze",
         json={
             "tickers": ["AAPL", "MSFT"],

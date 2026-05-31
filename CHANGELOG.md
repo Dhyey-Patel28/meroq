@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.6.1 — API test-client cleanup
+
+### Fixed
+
+- Replaced `fastapi.testclient.TestClient` in API tests with direct `httpx.ASGITransport` and `httpx.AsyncClient` calls.
+- Removed the Starlette/FastAPI TestClient deprecation warning without suppressing it.
+- Kept API tests deterministic and local; no live market/news providers are called by the default test suite.
+
+### Notes
+
+- This change only affects tests. It does not change the Streamlit app, FastAPI endpoints, model logic, or local data layer.
+- If the API later adds startup/shutdown lifespan behavior, tests may need a lifespan manager around the ASGI transport.
+
+
 ## 1.6.0 — GitHub Actions CI
 
 ### Added
