@@ -25,6 +25,10 @@ def main() -> None:
     args = parse_args()
     base = args.base_url.rstrip("/")
 
+    root = requests.get(f"{base}/", timeout=20)
+    root.raise_for_status()
+    _print("Root", root.json())
+
     health = requests.get(f"{base}/health", timeout=20)
     health.raise_for_status()
     _print("Health", health.json())

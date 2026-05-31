@@ -124,10 +124,14 @@ def build_portfolio_view(scan_df: pd.DataFrame, weights_df: pd.DataFrame) -> tup
     holdings["weighted_sentiment_score"] = holdings["weight"] * holdings.get("sentiment_score", 0.0)
     holdings["weighted_daily_return"] = holdings["weight"] * holdings.get("return_1d", 0.0)
 
+    weighted_meroq_score = float(holdings["weighted_meroq_score"].sum())
+    holding_count = int(len(holdings))
+
     summary = {
-        "positions": int(len(holdings)),
+        # Canonical public keys used by the UI, API, reports, and tests.
+        "holding_count": holding_count,
+        "weighted_meroq_score": weighted_meroq_score,
         "total_weight": float(holdings["weight"].sum()),
-        "portfolio_meroq_score": float(holdings["weighted_meroq_score"].sum()),
         "weighted_up_probability": float(holdings["weighted_up_probability"].sum()),
         "weighted_downside_probability": float(holdings["weighted_downside_probability"].sum()),
         "weighted_sentiment_score": float(holdings["weighted_sentiment_score"].sum()),
@@ -137,6 +141,10 @@ def build_portfolio_view(scan_df: pd.DataFrame, weights_df: pd.DataFrame) -> tup
         "positive_sentiment_weight": _weighted_label_share(holdings, "sentiment_label", "Positive"),
         "high_risk_weight": float(holdings.loc[holdings.get("risk_label", "").astype(str).str.contains("High|Elevated", case=False, na=False), "weight"].sum()) if "risk_label" in holdings else 0.0,
     }
+
+    # Backward-compatible aliases retained for existing app/report code.
+    summary["positions"] = holding_count
+    summary["portfolio_meroq_score"] = weighted_meroq_score
     summary["portfolio_risk_label"] = _portfolio_risk_label(summary)
     summary["portfolio_signal_label"] = _portfolio_signal_label(summary)
 
@@ -188,8 +196,10 @@ def _portfolio_signal_label(summary: dict) -> str:
 
 def _empty_summary() -> dict:
     return {
+        "holding_count": 0,
         "positions": 0,
         "total_weight": 0.0,
+        "weighted_meroq_score": 0.0,
         "portfolio_meroq_score": 0.0,
         "weighted_up_probability": 0.0,
         "weighted_downside_probability": 0.0,
@@ -206,11 +216,13 @@ def _empty_summary() -> dict:
 
 def portfolio_summary_sentence(summary: dict) -> str:
     """Human-readable portfolio interpretation for the UI/report."""
-    if not summary or int(summary.get("positions", 0) or 0) == 0:
+    holding_count = int(summary.get("holding_count", summary.get("positions", 0)) or 0)
+    if not summary or holding_count == 0:
         return "Portfolio view is unavailable until at least one position is scanned successfully."
+    score = float(summary.get("weighted_meroq_score", summary.get("portfolio_meroq_score", 0.0)) or 0.0)
     return (
         f"The scanned portfolio has a {summary.get('portfolio_signal_label', 'Neutral').lower()} signal profile, "
-        f"a Meroq score of {float(summary.get('portfolio_meroq_score', 0.0)):.1f}/100, "
+        f"a Meroq score of {score:.1f}/100, "
         f"weighted up probability of {float(summary.get('weighted_up_probability', 0.0)):.1%}, "
         f"and {summary.get('portfolio_risk_label', 'balanced risk').lower()}."
     )

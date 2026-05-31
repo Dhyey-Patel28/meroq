@@ -6,15 +6,15 @@ It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**Release 1.4.2 — Prediction page cleanup**
+**Release 1.5.1 — API QA patch**
 
-This release cleans up the Forecast-first prediction experience:
+This patch stabilizes the API test suite introduced in 1.5.0:
 
-- Keeps the Prediction tab focused on current price, forecast range, confidence, and plain-English reasoning
-- Removes the historical probability diagnostic from the main Prediction tab
-- Moves the historical model-probability diagnostic to Model Details
-- Replaces always-visible technical explanations with compact metric help tooltips and collapsed advanced details
-- Adds `*.zip` to `.gitignore` so local release archives are not accidentally committed
+- Aligns portfolio summary keys across `src/portfolio.py`, the FastAPI endpoint, and the pytest suite.
+- Keeps backward-compatible portfolio aliases for existing UI/report code.
+- Confirms the automated tests can be used as a real regression gate before future API/frontend work.
+
+The Streamlit app remains the main product UI. The API is a migration bridge for a future Next.js or React frontend.
 
 ## Core capabilities
 

@@ -39,5 +39,5 @@ hf_cache/
 # Keep data directory present
 !data/.gitkeep
 
-# Local release archives
+# Local release packages
 *.zip

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 from math import isfinite
 from typing import Any
 
@@ -17,7 +18,7 @@ from src.portfolio import build_portfolio_view, parse_portfolio_weights, portfol
 from src.services import SingleTickerAnalysisRequest, run_single_ticker_analysis
 from src.watchlist import scan_watchlist, summarize_watchlist_scan
 
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.1"
 
 
 class TickerAnalysisPayload(BaseModel):
@@ -125,14 +126,22 @@ def create_app() -> FastAPI:
         ),
     )
 
+    default_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8501",
+        "http://127.0.0.1:8501",
+    ]
+    configured_origins = os.getenv("MEROQ_API_ALLOWED_ORIGINS", "").strip()
+    allowed_origins = (
+        [origin.strip() for origin in configured_origins.split(",") if origin.strip()]
+        if configured_origins
+        else default_origins
+    )
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:8501",
-            "http://127.0.0.1:8501",
-        ],
+        allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -145,6 +154,17 @@ def create_app() -> FastAPI:
             "app": "Meroq API",
             "version": APP_VERSION,
             "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+
+    @app.get("/")
+    def root() -> dict[str, Any]:
+        return {
+            "app": "Meroq API",
+            "version": APP_VERSION,
+            "status": "ok",
+            "docs": "/docs",
+            "health": "/health",
+            "metadata": "/metadata",
         }
 
     @app.get("/metadata")
@@ -264,7 +284,7 @@ def create_app() -> FastAPI:
                 drift_mode=payload.drift_mode,
                 max_adjustment=payload.max_adjustment,
             )
-            weights_df = parse_portfolio_weights(payload.weights, payload.tickers)
+            weights_df = parse_portfolio_weights(payload.tickers, payload.weights)
             holdings_df, portfolio_summary = build_portfolio_view(scan_df, weights_df)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

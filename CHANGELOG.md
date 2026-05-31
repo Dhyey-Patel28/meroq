@@ -1,18 +1,30 @@
 # Changelog
 
-## 1.4.2 - Prediction page cleanup
+## 1.5.1 — API QA patch
 
 ### Fixed
-- Removed duplicate historical probability diagnostic charts from the Prediction tab.
-- Prevented the Prediction tab from briefly rendering an intermediate diagnostic view before the final forecast view.
+
+- Fixed portfolio summary key mismatch that caused the new pytest suite to fail.
+- Standardized portfolio summary output around `holding_count` and `weighted_meroq_score`.
+- Kept `positions` and `portfolio_meroq_score` as compatibility aliases for existing UI/report code.
+- Bumped API version metadata to 1.5.1.
+
+## 1.5.0 - API hardening and automated QA
+
+### Added
+- Added `tests/` with lightweight pytest coverage for API and portfolio logic.
+- Added `scripts/run_tests.py` for one-command local regression checks.
+- Added `docs/TESTING.md` to document the automated and manual QA workflow.
+- Added a root API endpoint (`GET /`) with links to health, metadata, and docs.
+- Added configurable API CORS origins through `MEROQ_API_ALLOWED_ORIGINS`.
+
+### Fixed
+- Fixed the portfolio API endpoint to pass tickers and weights to `parse_portfolio_weights()` in the correct order.
+- Added `*.zip` to `.gitignore` so local release packages are not accidentally committed.
 
 ### Changed
-- Moved the simple train/test probability diagnostic to the Model Details tab.
-- Replaced always-visible technical explanation text with hover/help tooltips on the technical summary metrics.
-- Simplified the advanced technical table so it shows values first and explanations only when expanded.
-
-### Maintenance
-- Added `*.zip` to `.gitignore` to prevent local release archives from being committed.
+- Updated API documentation to reflect the current local backend workflow.
+- Added pytest and httpx to the unified requirements file.
 
 ## 1.4.1 - Forecast-first Prediction UX
 
