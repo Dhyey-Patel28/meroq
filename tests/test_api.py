@@ -8,30 +8,23 @@ import httpx
 from api.main import create_app
 
 
-APP = create_app()
+async def _async_request(method: str, path: str, **kwargs: Any) -> httpx.Response:
+    """Call the ASGI app directly without FastAPI/Starlette TestClient.
 
-
-async def _request(method: str, path: str, **kwargs: Any) -> httpx.Response:
-    """Call the FastAPI app directly through ASGI without Starlette TestClient.
-
-    This avoids the deprecated Starlette/FastAPI TestClient compatibility path
-    while keeping tests fast and fully local.
+    Using HTTPX's ASGITransport avoids the Starlette TestClient deprecation
+    warning while keeping these tests deterministic and network-free.
     """
-    transport = httpx.ASGITransport(app=APP)
+    transport = httpx.ASGITransport(app=create_app())
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         return await client.request(method, path, **kwargs)
 
 
-def api_get(path: str, **kwargs: Any) -> httpx.Response:
-    return asyncio.run(_request("GET", path, **kwargs))
-
-
-def api_post(path: str, **kwargs: Any) -> httpx.Response:
-    return asyncio.run(_request("POST", path, **kwargs))
+def _request(method: str, path: str, **kwargs: Any) -> httpx.Response:
+    return asyncio.run(_async_request(method, path, **kwargs))
 
 
 def test_health_endpoint() -> None:
-    response = api_get("/health")
+    response = _request("GET", "/health")
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
@@ -39,7 +32,7 @@ def test_health_endpoint() -> None:
 
 
 def test_root_endpoint_points_to_docs() -> None:
-    response = api_get("/")
+    response = _request("GET", "/")
     assert response.status_code == 200
     body = response.json()
     assert body["docs"] == "/docs"
@@ -47,7 +40,7 @@ def test_root_endpoint_points_to_docs() -> None:
 
 
 def test_metadata_endpoint_has_defaults() -> None:
-    response = api_get("/metadata")
+    response = _request("GET", "/metadata")
     assert response.status_code == 200
     body = response.json()
     assert "models" in body
@@ -100,7 +93,8 @@ def test_portfolio_endpoint_uses_ticker_first_weight_parser(monkeypatch) -> None
 
     monkeypatch.setattr(main_module, "scan_watchlist", fake_scan_watchlist)
 
-    response = api_post(
+    response = _request(
+        "POST",
         "/portfolio/analyze",
         json={
             "tickers": ["AAPL", "MSFT"],

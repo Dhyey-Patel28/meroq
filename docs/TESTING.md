@@ -36,14 +36,6 @@ python scripts/api_smoke_test.py --ticker AAPL
 python scripts/news_smoke_test.py --ticker AAPL --source all_configured --engine lightweight --force-refresh
 ```
 
-
-## API test client strategy
-
-API endpoint tests call the FastAPI app directly through `httpx.ASGITransport` and `httpx.AsyncClient`.
-This avoids the deprecated Starlette/FastAPI `TestClient` compatibility path while keeping the tests fully local and fast.
-
-The app currently has no custom startup/shutdown lifespan handlers. If that changes later, add an ASGI lifespan manager to the API test helper.
-
 ## Recommended pre-commit checklist
 
 ```bash
@@ -64,3 +56,7 @@ python scripts/run_tests.py
 
 The CI workflow does not require API keys and does not call external market/news providers. Live-data paths should be checked with smoke scripts when needed.
 
+
+## API test client note
+
+API tests use `httpx.ASGITransport` with `httpx.AsyncClient` instead of FastAPI/Starlette `TestClient`. This avoids the Starlette TestClient deprecation warning and keeps endpoint tests network-free.

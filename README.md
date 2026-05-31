@@ -1,49 +1,56 @@
 # Meroq
 
-Meroq is a local market-intelligence project for stock movement research. It combines price features, machine-learning signals, news sentiment, Monte Carlo risk simulation, watchlist scanning, portfolio exposure views, a Streamlit dashboard, a FastAPI backend, and a growing Next.js frontend.
+[![CI](https://github.com/Dhyey-Patel28/meroq/actions/workflows/ci.yml/badge.svg)](https://github.com/Dhyey-Patel28/meroq/actions/workflows/ci.yml)
 
-> Educational/research use only. Meroq is not financial advice and should not be treated as an automated trading system.
+**Meroq** is a local-first market intelligence dashboard for stock movement analysis, model comparison, walk-forward backtesting, Monte Carlo risk simulation, and recent-news sentiment analysis.
+
+It is built for research and education. It is **not financial advice**.
 
 ## Current release
 
-**1.8.0 — Frontend product client**
+**Release 1.7.0 — Human-centered news and trust UX**
 
-The Next.js frontend now calls the local FastAPI backend for ticker analysis, watchlist scans, and portfolio views. Streamlit remains the most complete UI while the React/Next.js interface matures.
+This release improves the user-facing experience around news sentiment and trust:
 
-## Main capabilities
+- Recent news now shows source article links directly in the News Sentiment tab.
+- Headline cards make it easier to inspect which articles influenced sentiment.
+- The headline table uses clickable source-link cells where URLs are available.
+- API tests no longer use the deprecated FastAPI/Starlette `TestClient` path.
+- Added human-centered UX principles and a D3 visualization roadmap for future frontend work.
 
-- Single-ticker prediction and forecast-style summary
-- Technical indicators and XGBoost-based directional modeling
-- Model comparison and walk-forward backtesting
-- Monte Carlo risk simulation
-- Company-aware news fetching and sentiment analysis
-- Sentiment-aware signal overlay
-- Watchlist intelligence with Meroq Score
-- Portfolio risk and exposure view
-- Markdown/CSV reporting
-- FastAPI backend for reusable analysis endpoints
-- Next.js frontend client for the API
-- Lightweight pytest suite and GitHub Actions CI
+The Streamlit app remains the main product UI. The FastAPI service layer remains the bridge for a future Next.js or React frontend.
 
-## Project layout
+## Core capabilities
 
-```text
-meroq/
-├── app.py                     # Streamlit dashboard
-├── api/                       # FastAPI backend
-├── frontend/                  # Next.js frontend client
-├── src/                       # Core analysis modules
-├── scripts/                   # CLI utilities and smoke tests
-├── tests/                     # Lightweight automated tests
-├── docs/                      # Architecture, API, testing, frontend docs
-├── notebooks/                 # Research notebooks
-├── data/                      # Local generated data, ignored except .gitkeep
-└── requirements.txt
-```
+- Download historical OHLCV data with `yfinance`
+- Generate technical indicators including SMA, EMA, RSI, MACD, Bollinger Bands, ATR, volatility, and stochastic oscillator
+- Train and compare multiple models:
+  - Momentum baseline
+  - Logistic regression
+  - Random forest
+  - Extra Trees
+  - HistGradientBoosting
+  - XGBoost
+  - LightGBM
+  - CatBoost
+  - Soft voting ensemble
+  - Stacking ensemble
+- Predict next-period up/down probability
+- Run walk-forward validation
+- Simulate strategy behavior with transaction costs
+- Run Monte Carlo price-risk simulation
+- Scan a watchlist and rank symbols with a transparent Meroq Score
+- Analyze a scanned watchlist as a weighted portfolio with exposure and downside-risk summaries
+- Resolve tickers to company names before broad news search
+- Fetch and relevance-filter recent company headlines
+- Score headlines with lightweight or local Hugging Face financial sentiment models
+- Combine model probability with recent-news sentiment as a transparent signal overlay
+- Aggregate headline sentiment into daily feature rows
+- Persist daily sentiment features to the local data layer
+- Compare technical-only and sentiment-enhanced model variants when coverage is sufficient
+- Cache market/news data locally
 
-## Setup
-
-Create and activate a Python environment:
+## Installation
 
 ```powershell
 py -3.11 -m venv .venv
@@ -51,115 +58,190 @@ py -3.11 -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-Create a local environment file for optional API keys:
+The single `requirements.txt` includes the dashboard, modeling libraries, local Hugging Face sentiment stack, and research notebook dependencies.
 
-```powershell
-Copy-Item .\.env.example .\.env
-```
-
-Do not commit `.env`.
-
-## Run Streamlit
+## Run the app
 
 ```powershell
 python -m streamlit run app.py
 ```
 
-Open:
+## Deployment and frontend direction
 
-```text
-http://localhost:8501
-```
+Meroq currently uses Streamlit because it is the fastest way to iterate on data science workflows, model diagnostics, and research UX. A React/Next.js frontend is a good future direction after the backend/API boundary is stable.
 
-## Run the FastAPI backend
+Read:
 
-```powershell
-python scripts/run_api.py --reload
-```
+- `docs/DEPLOYMENT.md` for local/public-demo guidance and secrets handling
+- `docs/FRONTEND_MIGRATION.md` for the Streamlit-to-FastAPI/Next.js migration plan
+- `docs/PORTFOLIO_RISK.md` for the portfolio exposure view
+- `docs/QA_AUDIT.md` for senior QA findings and fixes
+- `docs/CI.md` for GitHub Actions CI behavior and local test commands
+- `docs/HCD_UX_PRINCIPLES.md` for product UX principles
+- `docs/D3_VISUALIZATION_ROADMAP.md` for future D3 visualization ideas
 
-Open:
+## Optional API keys
 
-```text
-http://127.0.0.1:8000/docs
-```
+Meroq can run without paid APIs. Optional news providers can be enabled with your own keys.
 
-## Run the Next.js frontend
-
-In another terminal:
+Create a local `.env` file:
 
 ```powershell
-cd frontend
-npm install
-npm run dev
+Copy-Item .\.env.example .\.env
+notepad .env
 ```
 
-Open:
+Example:
 
-```text
-http://localhost:3000
+```env
+FINNHUB_API_KEY=your_finnhub_key
+NEWSAPI_API_KEY=your_newsapi_key
 ```
 
-The frontend calls the API at `http://127.0.0.1:8000` by default. You can override this with `NEXT_PUBLIC_MEROQ_API_URL` in a local frontend env file.
+Do not commit `.env`.
 
-## Run tests
+NewsAPI note: the free Developer plan is intended for local development/testing. Do not use a free NewsAPI key for a hosted, staging, or production deployment.
+
+## Recommended first run
+
+Use these settings first:
+
+- Ticker: `AAPL`
+- History period: `5y`
+- Interval: `1d`
+- Analysis mode: `Fast mode`
+- News source: `All configured sources, recommended`
+- Sentiment engine: `Lightweight financial lexicon`
+- Run walk-forward comparison: off
+- Use sentiment-aware signal overlay: on
+
+After the basic run works, try:
+
+- Sentiment engine: `ProsusAI/finbert`
+- Sentiment engine: `Finance sentiment ensemble`
+
+The first Hugging Face run may be slow because models are downloaded and cached locally.
+
+## Local data scripts
+
+Refresh default watchlist market data:
 
 ```powershell
-python scripts/run_tests.py
+python scripts/refresh_data.py --period max --interval 1d
 ```
 
-The default test suite avoids live market/news/model downloads so it can run in CI.
-
-## Useful CLI commands
-
-Single-ticker analysis:
+Force refresh:
 
 ```powershell
-python scripts/analyze_ticker.py --ticker AAPL --period 5y --interval 1d
+python scripts/refresh_data.py --period max --interval 1d --force
 ```
 
-Watchlist scan:
-
-```powershell
-python scripts/scan_watchlist.py --tickers AAPL,MSFT,NVDA,SPY --period 5y --interval 1d
-```
-
-Portfolio analysis:
-
-```powershell
-python scripts/analyze_portfolio.py --tickers AAPL,MSFT,NVDA,SPY --weights "AAPL:30,MSFT:25,NVDA:25,SPY:20"
-```
-
-Inspect local data store:
+Inspect local data inventory:
 
 ```powershell
 python scripts/inspect_data_store.py
 ```
 
-## Optional news and NLP configuration
+Test news + sentiment:
 
-Meroq works without paid APIs. Optional keys may be added to `.env`:
-
-```env
-FINNHUB_API_KEY=
-NEWSAPI_API_KEY=
+```powershell
+python scripts/news_smoke_test.py --ticker AAPL --source all_configured --engine lightweight
 ```
 
-NewsAPI's free Developer plan should only be used for local development/testing with your own key. Do not commit keys or use your personal key for a public hosted app.
+Run a watchlist scan from the command line:
 
-Hugging Face finance sentiment models run locally after download; no Hugging Face API key is required for the default local workflow.
+```powershell
+python scripts/scan_watchlist.py --tickers AAPL,MSFT,NVDA,SPY --period 5y --interval 1d
+```
 
-## Notes on generated files
+Download Hugging Face models ahead of time:
 
-The repository should not commit:
+```powershell
+python scripts/download_hf_models.py
+```
 
+## Project layout
+
+```text
+meroq/
+├── app.py
+├── requirements.txt
+├── scripts/
+│   ├── bootstrap_watchlist.py
+│   ├── refresh_data.py
+│   ├── inspect_data_store.py
+│   ├── news_smoke_test.py
+│   ├── scan_watchlist.py
+│   └── download_hf_models.py
+├── src/
+│   ├── backtesting.py
+│   ├── charts.py
+│   ├── config.py
+│   ├── data_loader.py
+│   ├── features.py
+│   ├── model.py
+│   ├── news_sentiment.py
+│   ├── sentiment_features.py
+│   ├── signal_fusion.py
+│   ├── risk_simulation.py
+│   ├── watchlist.py
+│   └── storage.py
+├── docs/
+├── notebooks/
+└── data/
+```
+
+## Data storage
+
+Generated local files are ignored by Git:
+
+- `data/market_data.sqlite`
+- `data/news_cache.sqlite`
 - `.env`
 - `.venv/`
-- `data/*.sqlite`
-- `data/*.db`
-- `__pycache__/`
-- `*.pyc`
-- `*.zip`
-- `frontend/.next/`
-- `frontend/node_modules/`
+- Hugging Face model cache directories
 
-These are ignored by `.gitignore`.
+## License
+
+See `LICENSE`.
+
+
+## Exportable Reports
+
+Meroq includes a **Report** tab that generates a local Markdown report for the current analysis run. The report summarizes:
+
+- latest model signal and probability
+- sentiment-aware probability adjustment
+- recent-news sentiment summary
+- Monte Carlo risk simulation summary
+- watchlist highlights
+- model comparison snapshot
+- interpretation notes and limitations
+
+Reports are generated locally in the browser session. They do not include API keys, `.env` values, SQLite databases, or local cache files.
+
+
+
+## Local API Backend
+
+Meroq also includes a local FastAPI backend for service-layer testing and future frontend migration.
+
+Run the API:
+
+```powershell
+python scripts/run_api.py --reload
+```
+
+Open the interactive docs:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Smoke test it from a second terminal:
+
+```powershell
+python scripts/api_smoke_test.py --ticker AAPL
+```
+
+The Streamlit app remains the primary UI. The API is a foundation for a future FastAPI + Next.js architecture.
