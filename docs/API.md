@@ -100,18 +100,8 @@ When `return_details=true`, `POST /analysis/ticker` includes `details.risk_perce
 This is a visualization aid, not a guaranteed price forecast.
 
 
-## Progressive watchlist scanning
+## Watchlist progressive scan
 
-`POST /watchlist/scan-one` analyzes one ticker and returns one row-shaped result:
+### `POST /watchlist/scan-one`
 
-```json
-{
-  "ticker": "AAPL",
-  "period": "5y",
-  "interval": "1d",
-  "include_sentiment": true,
-  "include_risk": true
-}
-```
-
-The endpoint is designed for UI clients that want to append watchlist rows as each ticker completes. If a symbol cannot be downloaded or analyzed, the endpoint returns a failed row instead of failing the whole watchlist request.
+Scans one ticker at a time for progressive frontend loading. It always returns a `row` object. Successful rows contain the normal watchlist fields. Failed rows return `status: failed` and a user-facing `error` message so the frontend can keep scanning other symbols.

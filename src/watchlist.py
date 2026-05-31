@@ -60,6 +60,20 @@ def _progress(progress_callback: Callable[[dict], None] | None, payload: dict) -
         progress_callback(payload)
 
 
+def friendly_scan_error(ticker: str, exc: Exception | str) -> str:
+    """Convert provider/model exceptions into a concise user-facing message."""
+    symbol = str(ticker).upper().strip()
+    raw = str(exc).strip() or "No price data returned."
+    lowered = raw.lower()
+    if any(token in lowered for token in ["possibly delisted", "not found", "no timezone found", "no price data", "quote not found"]):
+        return (
+            f"Unable to load data for {symbol}. The symbol may be delisted, renamed, unsupported by the provider, or temporarily unavailable."
+        )
+    if "empty" in lowered and "data" in lowered:
+        return f"Unable to load data for {symbol}. The provider returned no usable price history."
+    return f"Unable to load data for {symbol}. {raw}"
+
+
 def scan_single_ticker(
     ticker: str,
     period: str = "5y",
@@ -220,8 +234,9 @@ def scan_watchlist(
             rows.append(row)
             _progress(progress_callback, {"status": "complete", "ticker": symbol, "index": idx, "total": total, "detail": f"score {row.get('meroq_score')}"})
         except Exception as exc:  # Keep one bad ticker from breaking the whole scan.
-            rows.append({"ticker": symbol, "status": "failed", "error": str(exc)})
-            _progress(progress_callback, {"status": "failed", "ticker": symbol, "index": idx, "total": total, "detail": str(exc)})
+            message = friendly_scan_error(symbol, exc)
+            rows.append({"ticker": symbol, "status": "failed", "error": message})
+            _progress(progress_callback, {"status": "failed", "ticker": symbol, "index": idx, "total": total, "detail": message})
 
     df = pd.DataFrame(rows)
     if not df.empty and "meroq_score" in df.columns:
