@@ -2,15 +2,21 @@
 
 import { FormEvent, useState } from "react";
 import { DataTable } from "@/components/DataTable";
+import { ErrorBox, LoadingState } from "@/components/StateBlocks";
 import { MetricCard } from "@/components/MetricCard";
 import { PageShell } from "@/components/PageShell";
-import { analyzePortfolio, parseTickerList, type ApiRecord } from "@/lib/api";
+import { analyzePortfolio, formatNumber, formatPct, parseTickerList, type ApiRecord } from "@/lib/api";
 
-function pct(value: unknown) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return "N/A";
-  return `${(number * 100).toFixed(1)}%`;
-}
+const holdingColumns = [
+  "ticker",
+  "weight",
+  "latest_close",
+  "final_signal",
+  "final_up_probability",
+  "risk_label",
+  "risk_loss_gt_5pct",
+  "meroq_score",
+];
 
 export default function PortfolioPage() {
   const [tickers, setTickers] = useState("AAPL,MSFT,NVDA,SPY");
@@ -37,6 +43,8 @@ export default function PortfolioPage() {
         interval: "1d",
         include_sentiment: true,
         include_risk: true,
+        news_source: "all_configured",
+        sentiment_engine: "lightweight",
         max_news_items: 10,
         risk_paths: 300,
       });
@@ -52,34 +60,39 @@ export default function PortfolioPage() {
 
   return (
     <PageShell>
-      <section className="hero">
-        <h1>Portfolio view</h1>
-        <p>Analyze weighted exposure from a watchlist scan through the FastAPI backend.</p>
+      <section className="hero compact-hero">
+        <p className="eyebrow">Portfolio view</p>
+        <h1>Turn watchlist signals into weighted exposure.</h1>
+        <p>Use custom weights to see which positions drive score, sentiment, and downside risk.</p>
       </section>
 
       <form className="card form" onSubmit={onSubmit}>
         <label>
-          Tickers
+          Portfolio tickers
           <textarea rows={2} value={tickers} onChange={(event) => setTickers(event.target.value)} />
         </label>
         <label>
           Weights
           <textarea rows={2} value={weights} onChange={(event) => setWeights(event.target.value)} />
         </label>
+        <p className="muted small">Format: AAPL:30, MSFT:25, NVDA:25, SPY:20. Blank weights default to equal weight.</p>
         <button disabled={loading}>{loading ? "Analyzing..." : "Analyze portfolio"}</button>
       </form>
 
-      {error ? <p className="error">{error}</p> : null}
+      {loading ? <LoadingState label="Analyzing portfolio..." /> : null}
+      {error ? <ErrorBox message={error} /> : null}
 
       {summary ? (
         <>
-          <section className="grid cols-3" style={{ marginTop: 18 }}>
+          <section className="grid cols-4" style={{ marginTop: 18 }}>
             <MetricCard label="Holdings" value={String(summary.holding_count ?? holdings.length)} />
-            <MetricCard label="Weighted Meroq score" value={String(summary.weighted_meroq_score ?? "N/A")} />
-            <MetricCard label="Weighted downside risk" value={pct(summary.weighted_downside_probability)} />
+            <MetricCard label="Weighted Meroq score" value={formatNumber(summary.weighted_meroq_score)} />
+            <MetricCard label="Weighted up probability" value={formatPct(summary.weighted_up_probability)} />
+            <MetricCard label="Downside exposure" value={formatPct(summary.weighted_downside_probability)} />
           </section>
-          <section className="card" style={{ marginTop: 18 }}>
-            <h2>Summary</h2>
+          <section className="card callout-card" style={{ marginTop: 18 }}>
+            <p className="status-label">Portfolio read</p>
+            <h2>{String(summary.portfolio_signal_label ?? "Balanced exposure")}</h2>
             <p className="muted">{sentence}</p>
           </section>
         </>
@@ -87,7 +100,7 @@ export default function PortfolioPage() {
 
       <section className="card" style={{ marginTop: 18 }}>
         <h2>Holdings</h2>
-        <DataTable rows={holdings} />
+        <DataTable rows={holdings} columns={holdingColumns} />
       </section>
     </PageShell>
   );

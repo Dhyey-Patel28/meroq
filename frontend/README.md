@@ -1,16 +1,22 @@
-# Meroq Frontend Scaffold
+# Meroq Frontend
 
-This is an early Next.js scaffold for the Meroq FastAPI backend. It does not replace the Streamlit app yet.
+This is the Next.js frontend for the local Meroq FastAPI backend.
+
+Streamlit remains the most complete UI, but this frontend now calls real API endpoints for:
+
+- ticker analysis
+- watchlist scanning
+- portfolio exposure
 
 ## Run locally
 
-Start the API from the project root:
+Terminal 1, from the project root:
 
 ```powershell
 python scripts/run_api.py --reload
 ```
 
-Then start the frontend:
+Terminal 2:
 
 ```powershell
 cd frontend
@@ -24,23 +30,18 @@ Open:
 http://localhost:3000
 ```
 
-## Configuration
+## API URL
 
-Copy `.env.example` to `.env.local` if the API runs somewhere else:
+By default, the frontend calls:
 
-```powershell
-Copy-Item .\.env.example .\.env.local
+```text
+http://127.0.0.1:8000
 ```
+
+Override it with:
 
 ```env
 NEXT_PUBLIC_MEROQ_API_URL=http://127.0.0.1:8000
 ```
 
-## Current pages
-
-- `/` — migration dashboard and backend status
-- `/ticker` — single ticker analysis
-- `/watchlist` — watchlist scan
-- `/portfolio` — portfolio exposure view
-
-This frontend intentionally starts simple. Streamlit remains the main production/prototype UI while the API contract stabilizes.
+Keep local frontend env files out of Git.

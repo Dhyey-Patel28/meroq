@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.8.0 — Frontend product client
+
+### Added
+
+- Upgraded the Next.js frontend from scaffold copy to functional product pages.
+- Added API-backed ticker analysis, watchlist scan, and portfolio workflows in the frontend.
+- Added frontend loading, error, probability, status, and metric components for a cleaner user experience.
+- Added a frontend dashboard that explains the Streamlit/FastAPI/Next.js split.
+
+### Changed
+
+- Moved the frontend from a local `frontend.zip` artifact into a normal tracked `frontend/` directory.
+- Removed generated frontend build output from the release package.
+- Bumped FastAPI metadata version to 1.8.0.
+- Updated frontend docs to describe the API-connected client.
+
+### Notes
+
+- Streamlit remains the complete primary UI.
+- The Next.js app is now useful for local API testing and future UI migration work, but it is still not the full replacement for Streamlit.
+
 ## 1.7.0 — Frontend migration scaffold
 
 ### Added

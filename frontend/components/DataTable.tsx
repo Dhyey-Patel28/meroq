@@ -1,7 +1,7 @@
 import type { ApiRecord } from "@/lib/api";
 
 function formatCell(value: ApiRecord[keyof ApiRecord]) {
-  if (value === null || value === undefined) return "—";
+  if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "number") {
     if (Math.abs(value) <= 1) return value.toFixed(4);
     return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -9,10 +9,18 @@ function formatCell(value: ApiRecord[keyof ApiRecord]) {
   return String(value);
 }
 
-export function DataTable({ rows, maxRows = 20 }: { rows: ApiRecord[]; maxRows?: number }) {
-  if (!rows.length) return <p className="muted">No rows available.</p>;
+export function DataTable({
+  rows,
+  columns,
+  maxRows = 20,
+}: {
+  rows: ApiRecord[];
+  columns?: string[];
+  maxRows?: number;
+}) {
+  if (!rows.length) return <p className="muted">No rows available yet.</p>;
 
-  const columns = Object.keys(rows[0]).slice(0, 10);
+  const tableColumns = columns?.length ? columns : Object.keys(rows[0]).slice(0, 10);
   const visibleRows = rows.slice(0, maxRows);
 
   return (
@@ -20,7 +28,7 @@ export function DataTable({ rows, maxRows = 20 }: { rows: ApiRecord[]; maxRows?:
       <table>
         <thead>
           <tr>
-            {columns.map((column) => (
+            {tableColumns.map((column) => (
               <th key={column}>{column.replaceAll("_", " ")}</th>
             ))}
           </tr>
@@ -28,7 +36,7 @@ export function DataTable({ rows, maxRows = 20 }: { rows: ApiRecord[]; maxRows?:
         <tbody>
           {visibleRows.map((row, index) => (
             <tr key={`${row.ticker ?? "row"}-${index}`}>
-              {columns.map((column) => (
+              {tableColumns.map((column) => (
                 <td key={column}>{formatCell(row[column])}</td>
               ))}
             </tr>

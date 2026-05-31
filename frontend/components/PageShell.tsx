@@ -13,6 +13,7 @@ export function PageShell({ children }: { children: ReactNode }) {
     <main className="app-shell">
       <nav className="top-nav">
         <Link className="brand" href="/">
+          <span className="brand-mark">M</span>
           Meroq
         </Link>
         <div className="nav-links">
