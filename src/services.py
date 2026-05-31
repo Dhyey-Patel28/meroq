@@ -182,7 +182,7 @@ def run_single_ticker_analysis(request: SingleTickerAnalysisRequest) -> dict[str
         final_signal=final_signal,
         final_up_probability=final_up_probability,
         sentiment_adjustment_pct_points=sentiment_adjustment,
-        news_sentiment_label=(sentiment_summary or {}).get("overall_label") if sentiment_summary else None,
+        news_sentiment_label=(sentiment_summary or {}).get("display_label", (sentiment_summary or {}).get("overall_label")) if sentiment_summary else None,
         news_sentiment_score=_metric_or_none(sentiment_summary or {}, "average_score") if sentiment_summary else None,
         headlines_analyzed=int((sentiment_summary or {}).get("headline_count", 0) if sentiment_summary else 0),
         risk_label=risk_name,
