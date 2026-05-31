@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import contextlib
-import io
 import re
 import sqlite3
 
@@ -52,7 +50,6 @@ def fetch_price_data(
     period: str = "5y",
     interval: str = "1d",
     save_to_sqlite: bool = True,
-    timeout_seconds: int = 12,
 ) -> pd.DataFrame:
     """
     Download historical OHLCV data from yfinance.
@@ -65,23 +62,14 @@ def fetch_price_data(
     if not ticker:
         raise ValueError("Ticker cannot be empty.")
 
-    download_kwargs = {
-        "tickers": ticker,
-        "period": period,
-        "interval": interval,
-        "auto_adjust": False,
-        "progress": False,
-        "threads": True,
-    }
-
-    # yfinance can print noisy "possibly delisted" messages for invalid symbols.
-    # Keep API/CLI output readable and return a clear ValueError instead.
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-        try:
-            df = yf.download(**download_kwargs, timeout=int(timeout_seconds))
-        except TypeError:
-            # Older yfinance versions may not support the timeout argument.
-            df = yf.download(**download_kwargs)
+    df = yf.download(
+        tickers=ticker,
+        period=period,
+        interval=interval,
+        auto_adjust=False,
+        progress=False,
+        threads=True,
+    )
 
     if df.empty:
         raise ValueError(f"No data returned for ticker: {ticker}")
