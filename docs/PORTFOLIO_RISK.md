@@ -60,3 +60,18 @@ Good next upgrades include:
 - portfolio-level Monte Carlo simulation using covariance
 - drawdown decomposition by holding
 - user-uploaded portfolio CSV support
+
+
+## 1.9.3 command-center upgrade
+
+The Portfolio page now adds a command-center layer on top of the existing weighted metrics:
+
+- concentration label and largest-position weight
+- grade distribution by portfolio weight
+- top score contributors
+- top downside contributors
+- weakest current setups
+- highest-risk holdings
+- plain-English portfolio alerts
+
+This keeps the view focused on the most important question: which holdings are driving the aggregate portfolio read?

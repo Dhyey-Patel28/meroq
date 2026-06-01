@@ -1,9 +1,9 @@
 # Meroq
 
-> Release 1.9.2 adds a target-aware sentiment evaluation harness with a local gold dataset, accuracy metrics, and regression gates for trust-critical headline scoring.
+> Release 1.9.3 turns the portfolio page into a command center with concentration checks, exposure drivers, grade distribution, and ranked risk/score contributors.
 
 
-Current release: 1.9.2 — Sentiment evaluation harness.
+Current release: 1.9.3 — Portfolio command center.
 
 Meroq is a local market-intelligence project for stock movement research. It combines price features, machine-learning signals, news sentiment, Monte Carlo risk simulation, watchlist scanning, portfolio exposure views, a Streamlit dashboard, a FastAPI backend, and a growing Next.js frontend.
 
@@ -11,9 +11,9 @@ Meroq is a local market-intelligence project for stock movement research. It com
 
 ## Current release
 
-**1.9.2 — Sentiment evaluation harness**
+**1.9.3 — Portfolio command center**
 
-Meroq now includes a local gold-labeled headline benchmark and evaluation CLI for target-aware sentiment accuracy. This makes sentiment quality measurable instead of relying on ad hoc inspection.
+Meroq now turns weighted holdings into a portfolio command center: concentration label, largest position, grade distribution, top downside drivers, top score contributors, weakest setups, and plain-English insight cards.
 
 ## Main capabilities
 
@@ -27,7 +27,7 @@ Meroq now includes a local gold-labeled headline benchmark and evaluation CLI fo
 - Meroq Grade and component rating labels
 - Watchlist intelligence with Meroq Score
 - Watchlist presets, input cleanup, and progressive scan controls
-- Portfolio risk and exposure view
+- Portfolio command center with exposure, concentration, grade distribution, and driver analysis
 - Markdown/CSV reporting
 - FastAPI backend for reusable analysis endpoints
 - Next.js frontend client for the API
