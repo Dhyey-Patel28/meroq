@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.9.2 — Sentiment evaluation harness
+
+### Added
+- Added a local gold-labeled sentiment benchmark for target-aware headline scoring.
+- Added a sentiment evaluation module and CLI that reports accuracy, macro-F1, relevance quality, cautionary recall, and latency.
+- Added regression tests so tricky headlines such as PLAY risky/buy-instead cases remain cautionary.
+- Added sentiment evaluation documentation.
+
+### Changed
+- Made `yfinance` import tolerant for lightweight offline sentiment evaluation/test paths.
+- Tightened target relevance handling so non-financial alias collisions like Square dancers are not promoted to medium relevance.
+- Bumped API metadata to 1.9.2.
+
+### Notes
+- This release is an accuracy-infrastructure release, not a UI release. It establishes a measurable path toward a Stockfish-like sentiment engine.
+
 ## 1.9.1 — Meroq Grades and component ratings
 
 ### Added

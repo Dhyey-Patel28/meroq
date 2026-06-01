@@ -10,7 +10,10 @@ import re
 
 import pandas as pd
 import requests
-import yfinance as yf
+try:
+    import yfinance as yf
+except Exception:  # pragma: no cover - optional dependency guard for lightweight evaluation/tests
+    yf = None
 
 from src.storage import load_news_from_cache, save_news_to_cache
 
@@ -262,7 +265,7 @@ def resolve_company_profile(ticker: str) -> dict[str, Any]:
     sector = ""
     industry = ""
 
-    if ticker:
+    if ticker and yf is not None:
         try:
             info = yf.Ticker(ticker).get_info() or {}
             long_name = str(info.get("longName") or "").strip()
@@ -406,6 +409,9 @@ def fetch_yfinance_news(ticker: str, max_items: int = 20) -> pd.DataFrame:
     """Fetch recent ticker news from yfinance. No API key, no billing."""
     ticker = ticker.strip().upper()
     if not ticker:
+        return pd.DataFrame()
+
+    if yf is None:
         return pd.DataFrame()
 
     try:
@@ -946,11 +952,13 @@ def apply_target_aware_sentiment(row: dict[str, Any], base: SentimentResult) -> 
         aliases.insert(0, company_name)
 
     relevance_score = float(row.get("relevance_score", 0.0) or 0.0)
+    finance_context = _finance_context_score(text)
+    ticker_context = _ticker_context_match(text, ticker)
     if relevance_score >= 6.0:
         relevance_label = "High"
     elif relevance_score >= 4.0:
         relevance_label = "Medium"
-    elif _target_mentioned(text, ticker, company_name, aliases):
+    elif _target_mentioned(text, ticker, company_name, aliases) and (finance_context > 0 or ticker_context):
         relevance_label = "Medium"
         relevance_score = max(relevance_score, 4.0)
     else:
