@@ -1,9 +1,9 @@
 # Meroq
 
-> Release 1.9.4 adds a portfolio scenario lab with current, equal-weight, and research-weighted what-if views, plus responsive chart polish for the portfolio command center.
+> Release 1.9.5 upgrades the watchlist into a screener command center with research queues, risk-review labels, priority scores, and scan notes.
 
 
-Current release: 1.9.4 — Portfolio scenario lab.
+Current release: 1.9.5 — Watchlist screener command center.
 
 Meroq is a local market-intelligence project for stock movement research. It combines price features, machine-learning signals, news sentiment, Monte Carlo risk simulation, watchlist scanning, portfolio exposure views, a Streamlit dashboard, a FastAPI backend, and a growing Next.js frontend.
 
@@ -11,9 +11,9 @@ Meroq is a local market-intelligence project for stock movement research. It com
 
 ## Current release
 
-**1.9.4 — Portfolio scenario lab**
+**1.9.5 — Watchlist screener command center**
 
-Meroq now compares current weights against equal-weight and research-weighted what-if scenarios. The scenario lab shows score, downside, up-probability, concentration, adds/trims, and clear disclaimers that these are diagnostic views rather than allocation advice.
+Meroq now classifies scanned tickers into Research queue, Momentum watch, Risk review, Low priority, and Data issue buckets. The watchlist page shows priority scores, scan notes, command insights, queue lists, and bucket filters while keeping progressive local scans.
 
 ## Main capabilities
 
@@ -25,8 +25,8 @@ Meroq now compares current weights against equal-weight and research-weighted wh
 - Sentiment gold benchmark and evaluation CLI
 - Sentiment-aware signal overlay
 - Meroq Grade and component rating labels
-- Watchlist intelligence with Meroq Score
-- Watchlist presets, input cleanup, and progressive scan controls
+- Watchlist screener with Meroq Score, bucket labels, research priority, and scan notes
+- Watchlist presets, input cleanup, progressive scan controls, and queue filters
 - Portfolio command center with exposure, concentration, grade distribution, driver analysis, and scenario lab
 - Markdown/CSV reporting
 - FastAPI backend for reusable analysis endpoints

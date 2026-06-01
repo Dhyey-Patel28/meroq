@@ -16,9 +16,9 @@ from src.model import MODEL_LABELS, model_dependency_status
 from src.news_sentiment import NEWS_SOURCE_OPTIONS, SENTIMENT_ENGINE_OPTIONS
 from src.portfolio import build_portfolio_view, parse_portfolio_weights, portfolio_summary_sentence
 from src.services import SingleTickerAnalysisRequest, run_single_ticker_analysis
-from src.watchlist import friendly_scan_error, scan_single_ticker, scan_watchlist, summarize_watchlist_scan
+from src.watchlist import enrich_watchlist_row, friendly_scan_error, scan_single_ticker, scan_watchlist, summarize_watchlist_scan
 
-APP_VERSION = "1.9.4"
+APP_VERSION = "1.9.5"
 
 
 class TickerAnalysisPayload(BaseModel):
@@ -305,11 +305,11 @@ def create_app() -> FastAPI:
                 max_adjustment=payload.max_adjustment,
             )
         except Exception as exc:
-            row = {
+            row = enrich_watchlist_row({
                 "ticker": payload.ticker.upper().strip(),
                 "status": "failed",
                 "error": friendly_scan_error(payload.ticker, exc),
-            }
+            })
         return {"row": _sanitize(row)}
 
     @app.post("/portfolio/analyze")
