@@ -46,7 +46,7 @@ function symbolForText(value: string) {
 function formatCell(value: ApiRecord[keyof ApiRecord], column: string) {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "number") {
-    if (column.includes("probability") || column.includes("weight") || column.includes("return") || column.includes("loss_gt") || column.includes("score_pct")) {
+    if (column.includes("probability") || column.includes("weight") || column.includes("return") || column.includes("loss_gt") || column.includes("score_pct") || column.includes("share")) {
       if (Math.abs(value) <= 1.5) return formatPct(value, 1);
     }
     if (Math.abs(value) <= 1) return value.toFixed(4);

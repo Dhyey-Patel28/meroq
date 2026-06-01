@@ -1,8 +1,12 @@
 export const API_BASE =
   process.env.NEXT_PUBLIC_MEROQ_API_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:8000";
 
-export type ApiValue = string | number | boolean | null | undefined;
-export type ApiRecord = Record<string, ApiValue>;
+export type ApiPrimitive = string | number | boolean | null | undefined;
+export type ApiValue = ApiPrimitive | ApiRecord | ApiArray;
+export interface ApiRecord {
+  [key: string]: ApiValue;
+}
+export interface ApiArray extends Array<ApiValue> {}
 
 export type HealthResponse = {
   status?: string;
