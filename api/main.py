@@ -18,7 +18,7 @@ from src.portfolio import build_portfolio_view, parse_portfolio_weights, portfol
 from src.services import SingleTickerAnalysisRequest, run_single_ticker_analysis
 from src.watchlist import enrich_watchlist_row, friendly_scan_error, scan_single_ticker, scan_watchlist, summarize_watchlist_scan
 
-APP_VERSION = "1.9.5"
+APP_VERSION = "1.9.6"
 
 
 class TickerAnalysisPayload(BaseModel):
@@ -228,6 +228,7 @@ def create_app() -> FastAPI:
 
         response: dict[str, Any] = {
             "summary": _sanitize(result.get("summary", {})),
+            "brief": _sanitize(result.get("brief", {})),
             "request": _sanitize(result.get("request", {})),
         }
         if payload.return_details:

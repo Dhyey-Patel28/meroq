@@ -56,6 +56,22 @@ function numeric(value: unknown) {
   return Number.isFinite(n) ? n : null;
 }
 
+function records(value: unknown): ApiRecord[] {
+  return Array.isArray(value) ? (value.filter((item) => item && typeof item === "object") as ApiRecord[]) : [];
+}
+
+function strings(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
+}
+
+function tone(value: unknown): "neutral" | "positive" | "negative" | "warning" {
+  const text = String(value ?? "").toLowerCase();
+  if (["positive", "success", "constructive"].some((token) => text.includes(token))) return "positive";
+  if (["negative", "danger", "risk", "caution"].some((token) => text.includes(token))) return "negative";
+  if (["warning", "partial", "balanced", "moderate", "low"].some((token) => text.includes(token))) return "warning";
+  return "neutral";
+}
+
 function plainLanguageRead(summary: ApiRecord, riskSummary?: ApiRecord) {
   const finalProbability = numeric(summary.final_up_probability ?? summary.base_up_probability);
   const sentiment = String(summary.news_sentiment_label ?? "Skipped");
@@ -125,6 +141,7 @@ export default function TickerPage() {
   }
 
   const summary = result?.summary;
+  const brief = result?.brief;
   const details = result?.details;
   const riskSummary = details?.risk_summary;
   const riskPercentiles = details?.risk_percentiles ?? [];
@@ -133,21 +150,24 @@ export default function TickerPage() {
   const confidence = confidenceLabel(summary?.final_up_probability ?? summary?.base_up_probability);
   const read = useMemo(() => (summary ? plainLanguageRead(summary, riskSummary) : ""), [summary, riskSummary]);
   const sourceSummary = headlineSourceSummary(headlines);
+  const briefKeyPoints = records(brief?.key_points);
+  const watchItems = strings(brief?.watch_items);
+  const researchChecks = strings(brief?.research_checks);
 
   return (
     <PageShell>
       <section className="hero compact-hero product-hero-split">
         <div>
           <p className="eyebrow">Ticker analysis</p>
-          <h1>Start with the answer, then inspect the evidence.</h1>
+          <h1>Read the ticker like an analyst one-pager.</h1>
           <p>
-            Run a local Meroq analysis for one ticker. The page shows the signal, confidence, risk lens,
-            and the exact news sources used for sentiment.
+            Run a local Meroq analysis for one ticker. The page now starts with stance, conviction, primary driver,
+            key evidence, and research checks before exposing the raw model details.
           </p>
         </div>
         <div className="hero-mini-card">
-          <span>Human-centered flow</span>
-          <strong>Signal → evidence → source articles</strong>
+          <span>Analyst brief flow</span>
+          <strong>Stance → driver → checklist → evidence</strong>
         </div>
       </section>
 
@@ -221,6 +241,55 @@ export default function TickerPage() {
           ) : null}
         </section>
       </div>
+
+      {summary && brief ? (
+        <section className="card analyst-brief-card" style={{ marginTop: 18 }}>
+          <div className="card-heading-row">
+            <div>
+              <p className="status-label">Analyst brief</p>
+              <h2>{String(summary.ticker)} research read</h2>
+            </div>
+            <div className="badge-row">
+              <StatusPill label={String(brief.stance_label ?? "Balanced / watch")} tone={tone(brief.stance_tone ?? brief.stance_label)} />
+              <StatusPill label={String(brief.conviction_label ?? "Low conviction")} tone={tone(brief.conviction_tone ?? brief.conviction_label)} />
+            </div>
+          </div>
+
+          <p className="analyst-brief-sentence">{String(brief.brief_sentence ?? read)}</p>
+
+          <div className="analyst-driver-card">
+            <span className="status-label">Primary driver</span>
+            <strong>{String(brief.primary_driver ?? "No single dominant driver")}</strong>
+          </div>
+
+          {briefKeyPoints.length ? (
+            <div className="brief-point-grid">
+              {briefKeyPoints.map((point, index) => (
+                <article className={`brief-point-card tone-${tone(point.tone)}`} key={`${point.title ?? "point"}-${index}`}>
+                  <span>{String(point.title ?? "Evidence")}</span>
+                  <strong>{String(point.value ?? "N/A")}</strong>
+                  <p>{String(point.note ?? "")}</p>
+                </article>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="grid cols-2 analyst-check-grid">
+            <div>
+              <p className="status-label">Watch items</p>
+              <ul className="checklist-list">
+                {watchItems.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </div>
+            <div>
+              <p className="status-label">Research checks</p>
+              <ul className="checklist-list">
+                {researchChecks.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {summary ? (
         <>

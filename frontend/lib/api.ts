@@ -35,6 +35,7 @@ export type TickerAnalysisPayload = {
 
 export type TickerAnalysisResponse = {
   summary: ApiRecord;
+  brief?: ApiRecord;
   request: ApiRecord;
   details?: {
     prediction?: ApiRecord;
