@@ -1,9 +1,9 @@
 # Meroq
 
-> Release 1.9.5 upgrades the watchlist into a screener command center with research queues, risk-review labels, priority scores, and scan notes.
+> Release 1.9.6 upgrades the ticker page into an analyst one-pager with stance, conviction, primary driver, evidence quality, watch items, and research checks.
 
 
-Current release: 1.9.5 — Watchlist screener command center.
+Current release: 1.9.6 — Ticker analyst brief.
 
 Meroq is a local market-intelligence project for stock movement research. It combines price features, machine-learning signals, news sentiment, Monte Carlo risk simulation, watchlist scanning, portfolio exposure views, a Streamlit dashboard, a FastAPI backend, and a growing Next.js frontend.
 
@@ -11,13 +11,13 @@ Meroq is a local market-intelligence project for stock movement research. It com
 
 ## Current release
 
-**1.9.5 — Watchlist screener command center**
+**1.9.6 — Ticker analyst brief**
 
-Meroq now classifies scanned tickers into Research queue, Momentum watch, Risk review, Low priority, and Data issue buckets. The watchlist page shows priority scores, scan notes, command insights, queue lists, and bucket filters while keeping progressive local scans.
+Meroq now builds a local analyst-style brief for each ticker analysis. The ticker page surfaces stance, conviction, primary driver, evidence quality, key points, watch items, and research checks before the raw model/risk/news detail.
 
 ## Main capabilities
 
-- Single-ticker prediction and forecast-style summary
+- Single-ticker prediction, analyst brief, and forecast-style summary
 - Technical indicators and XGBoost-based directional modeling
 - Model comparison and walk-forward backtesting
 - Monte Carlo risk simulation
@@ -26,6 +26,7 @@ Meroq now classifies scanned tickers into Research queue, Momentum watch, Risk r
 - Sentiment-aware signal overlay
 - Meroq Grade and component rating labels
 - Watchlist screener with Meroq Score, bucket labels, research priority, and scan notes
+- Ticker analyst brief with stance, conviction, primary driver, watch items, and research checks
 - Watchlist presets, input cleanup, progressive scan controls, and queue filters
 - Portfolio command center with exposure, concentration, grade distribution, driver analysis, and scenario lab
 - Markdown/CSV reporting

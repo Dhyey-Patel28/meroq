@@ -138,3 +138,45 @@ def test_watchlist_scan_one_survives_bad_ticker(monkeypatch) -> None:
     assert body["row"]["ticker"] == "SQ"
     assert body["row"]["status"] == "failed"
     assert "Unable to load data for SQ" in body["row"]["error"]
+
+
+def test_ticker_endpoint_returns_analyst_brief(monkeypatch) -> None:
+    import api.main as main_module
+
+    def fake_run_single_ticker_analysis(request):
+        return {
+            "request": {"ticker": request.ticker},
+            "summary": {
+                "ticker": "AAPL",
+                "final_up_probability": 0.59,
+                "base_up_probability": 0.57,
+                "meroq_grade": "B",
+                "headlines_analyzed": 4,
+            },
+            "brief": {
+                "ticker": "AAPL",
+                "stance_label": "Constructive but needs confirmation",
+                "brief_sentence": "AAPL is constructive but needs confirmation.",
+                "key_points": [],
+                "watch_items": [],
+                "research_checks": [],
+            },
+        }
+
+    monkeypatch.setattr(main_module, "run_single_ticker_analysis", fake_run_single_ticker_analysis)
+
+    response = api_post(
+        "/analysis/ticker",
+        json={
+            "ticker": "AAPL",
+            "include_news": False,
+            "include_risk": False,
+            "return_details": False,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"]["ticker"] == "AAPL"
+    assert body["brief"]["stance_label"] == "Constructive but needs confirmation"
+    assert "buy" not in body["brief"]["brief_sentence"].lower()

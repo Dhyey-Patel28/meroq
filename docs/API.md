@@ -89,6 +89,22 @@ npm run dev
 
 The API CORS defaults already allow `http://localhost:3000` and `http://127.0.0.1:3000`.
 
+## Ticker analyst-brief fields
+
+Release 1.9.6 adds a top-level `brief` object to ticker analysis responses. The brief is a local synthesis layer built from existing model, sentiment, risk, and grade fields. It includes:
+
+- `stance_label` and `stance_tone`
+- `conviction_label` and `conviction_tone`
+- `primary_driver`
+- `evidence_quality` and `evidence_tone`
+- `risk_read` and `sentiment_read`
+- `brief_sentence`
+- `key_points` for model signal, grade, risk, news, and evidence quality
+- `watch_items`
+- `research_checks`
+
+These fields are designed for research triage and explainability. They are not buy/sell recommendations.
+
 ## Ticker details: forecast percentiles
 
 When `return_details=true`, `POST /analysis/ticker` includes `details.risk_percentiles` if risk simulation is enabled. The frontend uses these rows to render the forecast range:

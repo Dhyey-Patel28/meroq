@@ -15,6 +15,7 @@ from src.news_sentiment import analyze_news_sentiment, fetch_news_for_ticker, su
 from src.risk_simulation import risk_label, simulate_price_paths
 from src.sentiment_features import aggregate_daily_sentiment
 from src.signal_fusion import fuse_prediction_with_sentiment
+from src.ticker_brief import build_ticker_brief
 
 
 @dataclass(frozen=True)
@@ -244,9 +245,13 @@ def run_single_ticker_analysis(request: SingleTickerAnalysisRequest) -> dict[str
         test_rows=int(metrics.get("test_rows", 0)),
     )
 
+    summary_dict = summary.as_dict()
+    brief = build_ticker_brief(summary_dict, risk_summary)
+
     return {
         "request": asdict(request),
-        "summary": summary.as_dict(),
+        "summary": summary_dict,
+        "brief": brief,
         "raw_prices": raw_df,
         "features": feature_df,
         "model_frame": model_frame,

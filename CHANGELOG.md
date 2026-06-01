@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.9.6 — Ticker analyst brief
+
+### Added
+- Added a local ticker analyst-brief builder that derives stance, conviction, primary driver, evidence quality, risk read, sentiment read, key points, watch items, and research checks from existing analysis output.
+- Added `brief` to `POST /analysis/ticker` and `GET /analysis/ticker/{ticker}` responses.
+- Upgraded the Next.js ticker page with an analyst one-pager section before detailed metrics, forecast bands, trust panel, and headline evidence.
+- Added regression coverage for constructive, cautionary, and thin-evidence ticker briefs.
+
+### Changed
+- Bumped API metadata to 1.9.6 and frontend package version to 0.3.11.
+- Kept brief language research-oriented and avoided buy/sell recommendations.
+
+### Notes
+- The analyst brief is a local synthesis layer over existing model, sentiment, risk, and grade fields. It does not add paid data dependencies.
+
 ## 1.9.5 — Watchlist screener command center
 
 ### Added
