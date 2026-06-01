@@ -8,6 +8,7 @@ import { ErrorBox, LoadingState } from "@/components/StateBlocks";
 import { MetricCard } from "@/components/MetricCard";
 import { PageShell } from "@/components/PageShell";
 import { StockDetailModal } from "@/components/StockDetailModal";
+import { StatusPill } from "@/components/StatusPill";
 import { analyzePortfolio, formatNumber, formatPct, parseTickerList, type ApiRecord } from "@/lib/api";
 
 const holdingColumns = [
@@ -19,8 +20,15 @@ const holdingColumns = [
   "meroq_grade",
   "risk_label",
   "risk_loss_gt_5pct",
+  "downside_contribution_share",
   "meroq_score",
+  "exposure_note",
 ];
+
+function asRecordArray(value: unknown): ApiRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is ApiRecord => Boolean(item) && typeof item === "object" && !Array.isArray(item));
+}
 
 function buildAllocationSlices(holdings: ApiRecord[]) {
   const top = holdings.slice(0, 5).map((row, index) => ({
@@ -31,6 +39,88 @@ function buildAllocationSlices(holdings: ApiRecord[]) {
   const remainder = holdings.slice(5).reduce((sum, row) => sum + Number(row.weight ?? 0), 0);
   if (remainder > 0) top.push({ label: "Other holdings", value: remainder, color: "#d9e0ee" });
   return top;
+}
+
+function buildGradeSlices(distribution: ApiRecord[]) {
+  const colors: Record<string, string> = {
+    A: "#047857",
+    B: "#16a34a",
+    C: "#f59e0b",
+    D: "#d97706",
+    F: "#dc2626",
+    "N/A": "#94a3b8",
+  };
+  return distribution.map((row) => ({
+    label: `Grade ${String(row.grade ?? "N/A")}`,
+    value: Number(row.weight ?? 0),
+    color: colors[String(row.grade ?? "N/A")] ?? "#94a3b8",
+    helper: `${String(row.count ?? 0)} holdings`,
+  }));
+}
+
+function toneForSeverity(value: unknown): "neutral" | "positive" | "negative" | "warning" {
+  const text = String(value ?? "").toLowerCase();
+  if (text.includes("positive")) return "positive";
+  if (text.includes("negative")) return "negative";
+  if (text.includes("warning")) return "warning";
+  return "neutral";
+}
+
+function commandMetric(value: unknown, fallback = "N/A") {
+  if (value === null || value === undefined || value === "") return fallback;
+  return String(value);
+}
+
+function contributionCopy(row: ApiRecord | undefined, metric: "risk" | "score") {
+  if (!row) return "No contributor available yet.";
+  if (metric === "risk") {
+    return `${String(row.ticker)} drives ${formatPct(row.downside_contribution_share)} of weighted downside probability.`;
+  }
+  return `${String(row.ticker)} contributes ${formatNumber(row.weighted_meroq_score)} weighted Meroq points.`;
+}
+
+function InsightCard({ alert }: { alert: ApiRecord }) {
+  const tone = toneForSeverity(alert.severity);
+  return (
+    <section className={`insight-card tone-${tone}`}>
+      <div className="card-heading-row">
+        <div>
+          <p className="status-label">Command insight</p>
+          <h3>{String(alert.title ?? "Portfolio insight")}</h3>
+        </div>
+        {alert.ticker ? <StatusPill label={String(alert.ticker)} tone={tone} /> : null}
+      </div>
+      <p className="muted">{String(alert.detail ?? "Review this exposure before relying on the aggregate portfolio read.")}</p>
+    </section>
+  );
+}
+
+function ContributorList({ title, rows, metric }: { title: string; rows: ApiRecord[]; metric: "risk" | "score" | "weak" }) {
+  return (
+    <section className="card contributor-card">
+      <div className="card-heading-row">
+        <h3>{title}</h3>
+        <span className="muted small">Top {rows.length || 0}</span>
+      </div>
+      {rows.length ? (
+        <div className="contributor-list">
+          {rows.map((row) => (
+            <div className="contributor-row" key={`${title}-${String(row.ticker)}`}>
+              <div>
+                <strong>{String(row.ticker)}</strong>
+                <p className="muted small">{String(row.exposure_note ?? row.risk_label ?? "Portfolio contributor")}</p>
+              </div>
+              <div className="contributor-metric">
+                {metric === "risk" ? formatPct(row.downside_contribution_share) : metric === "score" ? formatNumber(row.weighted_meroq_score) : formatNumber(row.meroq_score)}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">Run an analysis to populate this list.</p>
+      )}
+    </section>
+  );
 }
 
 export default function PortfolioPage() {
@@ -75,17 +165,26 @@ export default function PortfolioPage() {
   }
 
   const allocationSlices = useMemo(() => buildAllocationSlices(holdings), [holdings]);
+  const alerts = useMemo(() => asRecordArray(summary?.portfolio_alerts), [summary]);
+  const gradeDistribution = useMemo(() => asRecordArray(summary?.grade_distribution), [summary]);
+  const gradeSlices = useMemo(() => buildGradeSlices(gradeDistribution), [gradeDistribution]);
+  const topRiskContributors = useMemo(() => asRecordArray(summary?.top_risk_contributors), [summary]);
+  const topScoreContributors = useMemo(() => asRecordArray(summary?.top_score_contributors), [summary]);
+  const weakestHoldings = useMemo(() => asRecordArray(summary?.weakest_holdings), [summary]);
   const bullishWeight = Number(summary?.bullish_weight ?? 0);
   const bearishWeight = Number(summary?.bearish_weight ?? 0);
   const neutralWeight = Math.max(0, 1 - bullishWeight - bearishWeight);
   const highRiskWeight = Number(summary?.high_risk_weight ?? 0);
+  const topRisk = topRiskContributors[0];
+  const topScore = topScoreContributors[0];
+  const weakest = weakestHoldings[0];
 
   return (
     <PageShell>
       <section className="hero compact-hero">
-        <p className="eyebrow">Portfolio view</p>
-        <h1>Turn watchlist signals into weighted exposure.</h1>
-        <p>Use custom weights to see which positions drive score, probability, and downside risk — then click into any holding.</p>
+        <p className="eyebrow">Portfolio command center</p>
+        <h1>See what is carrying the portfolio read.</h1>
+        <p>Use custom weights to expose concentration, downside drivers, weak setups, and grade distribution before drilling into a holding.</p>
       </section>
 
       <form className="card form" onSubmit={onSubmit}>
@@ -122,21 +221,37 @@ export default function PortfolioPage() {
 
       {summary ? (
         <>
-          <section className="grid cols-4" style={{ marginTop: 18 }}>
-            <MetricCard label="Holdings" value={String(summary.holding_count ?? holdings.length)} />
+          <section className="grid cols-4 portfolio-command-grid" style={{ marginTop: 18 }}>
+            <MetricCard label="Holdings" value={String(summary.holding_count ?? holdings.length)} helper="Scanned successfully" />
             <MetricCard label="Portfolio grade" value={<GradeBadge grade={summary.portfolio_grade} label={summary.portfolio_grade_label} />} helper={String(summary.portfolio_grade_label ?? "Research grade, not advice.")} />
-            <MetricCard label="Weighted Meroq score" value={formatNumber(summary.weighted_meroq_score)} />
-            <MetricCard label="Weighted up probability" value={formatPct(summary.weighted_up_probability)} />
-            <MetricCard label="Downside exposure" value={formatPct(summary.weighted_downside_probability)} tone="warning" />
+            <MetricCard label="Weighted Meroq score" value={formatNumber(summary.weighted_meroq_score)} helper={commandMetric(summary.portfolio_health_label)} />
+            <MetricCard label="Weighted up probability" value={formatPct(summary.weighted_up_probability)} helper={String(summary.portfolio_signal_label ?? "Signal profile")} />
+            <MetricCard label="Downside exposure" value={formatPct(summary.weighted_downside_probability)} helper={`High-risk weight ${formatPct(highRiskWeight)}`} tone="warning" />
+            <MetricCard label="Concentration" value={commandMetric(summary.concentration_label)} helper={`${String(summary.largest_position_ticker ?? "Top holding")} at ${formatPct(summary.largest_position_weight)}`} tone={String(summary.concentration_label) === "Concentrated" ? "warning" : "neutral"} />
+            <MetricCard label="Top risk driver" value={String(topRisk?.ticker ?? "N/A")} helper={contributionCopy(topRisk, "risk")} tone="warning" />
+            <MetricCard label="Weakest setup" value={String(weakest?.ticker ?? "N/A")} helper={weakest ? `Meroq Score ${formatNumber(weakest.meroq_score)}` : "No weak holding available"} tone={Number(weakest?.meroq_score ?? 100) < 42 ? "negative" : "neutral"} />
           </section>
 
           <section className="card callout-card" style={{ marginTop: 18 }}>
-            <p className="status-label">Portfolio read</p>
-            <h2>{String(summary.portfolio_signal_label ?? "Portfolio read")}</h2>
+            <div className="card-heading-row">
+              <div>
+                <p className="status-label">Portfolio read</p>
+                <h2>{String(summary.portfolio_signal_label ?? "Portfolio read")}</h2>
+              </div>
+              <StatusPill label={String(summary.portfolio_risk_label ?? "Risk read")} tone={highRiskWeight >= 0.35 ? "negative" : "warning"} />
+            </div>
             <p className="plain-summary">{sentence}</p>
           </section>
 
-          <section className="grid cols-2" style={{ marginTop: 18 }}>
+          {alerts.length ? (
+            <section className="insight-grid" style={{ marginTop: 18 }}>
+              {alerts.map((alert, index) => (
+                <InsightCard alert={alert} key={`${String(alert.title ?? "alert")}-${index}`} />
+              ))}
+            </section>
+          ) : null}
+
+          <section className="grid cols-3 align-start" style={{ marginTop: 18 }}>
             <DonutChart
               title="Holding weights"
               subtitle="Top allocations by current portfolio weights"
@@ -145,8 +260,8 @@ export default function PortfolioPage() {
               slices={allocationSlices}
             />
             <DonutChart
-              title="Signal and risk posture"
-              subtitle="Weights rolled up from the current portfolio summary"
+              title="Signal posture"
+              subtitle="Weights rolled up from current holdings"
               centerLabel="High risk"
               centerValue={formatPct(highRiskWeight)}
               slices={[
@@ -155,6 +270,19 @@ export default function PortfolioPage() {
                 { label: "Bearish weight", value: bearishWeight, color: "#dc2626", helper: "Defensive share" },
               ]}
             />
+            <DonutChart
+              title="Grade exposure"
+              subtitle="Portfolio weight by Meroq Grade"
+              centerLabel="Grade"
+              centerValue={String(summary.portfolio_grade ?? "N/A")}
+              slices={gradeSlices.length ? gradeSlices : [{ label: "Unrated", value: 1, color: "#94a3b8" }]}
+            />
+          </section>
+
+          <section className="grid cols-3 align-start" style={{ marginTop: 18 }}>
+            <ContributorList title="Score contributors" rows={topScoreContributors} metric="score" />
+            <ContributorList title="Downside contributors" rows={topRiskContributors} metric="risk" />
+            <ContributorList title="Weakest holdings" rows={weakestHoldings} metric="weak" />
           </section>
         </>
       ) : null}
@@ -170,7 +298,7 @@ export default function PortfolioPage() {
         <DataTable
           rows={holdings}
           columns={holdingColumns}
-          searchPlaceholder="Search holdings, weights, signals, or risk…"
+          searchPlaceholder="Search holdings, weights, signals, risk, or exposure notes…"
           onRowClick={(row) => setSelectedRow(row)}
           rowHint="Holding details"
           exportFilename="meroq-portfolio-holdings.csv"

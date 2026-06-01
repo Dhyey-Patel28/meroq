@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Any, Iterable
 
 import numpy as np
-
-from src.grades import score_to_grade, grade_label
 import pandas as pd
+
+from src.grades import grade_label, score_to_grade
 
 
 REQUIRED_SCAN_COLUMNS = [
@@ -19,6 +19,8 @@ REQUIRED_SCAN_COLUMNS = [
     "risk_positive_probability",
     "meroq_score",
 ]
+
+GRADE_ORDER = ["A", "B", "C", "D", "F", "N/A"]
 
 
 def parse_portfolio_weights(tickers: Iterable[str], weights_text: str | None = None) -> pd.DataFrame:
@@ -85,7 +87,7 @@ def parse_portfolio_weights(tickers: Iterable[str], weights_text: str | None = N
 
 
 def build_portfolio_view(scan_df: pd.DataFrame, weights_df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
-    """Join watchlist scan output with weights and compute portfolio metrics."""
+    """Join watchlist scan output with weights and compute portfolio command-center metrics."""
     if scan_df is None or scan_df.empty or weights_df is None or weights_df.empty:
         return pd.DataFrame(), _empty_summary()
 
@@ -126,8 +128,22 @@ def build_portfolio_view(scan_df: pd.DataFrame, weights_df: pd.DataFrame) -> tup
     holdings["weighted_sentiment_score"] = holdings["weight"] * holdings.get("sentiment_score", 0.0)
     holdings["weighted_daily_return"] = holdings["weight"] * holdings.get("return_1d", 0.0)
 
+    total_score_contribution = _safe_sum(holdings["weighted_meroq_score"])
+    total_downside_contribution = _safe_sum(holdings["weighted_downside_probability"])
+    holdings["score_contribution_share"] = _share_series(holdings["weighted_meroq_score"], total_score_contribution)
+    holdings["downside_contribution_share"] = _share_series(holdings["weighted_downside_probability"], total_downside_contribution)
+    holdings["exposure_note"] = holdings.apply(_holding_exposure_note, axis=1)
+
     weighted_meroq_score = float(holdings["weighted_meroq_score"].sum())
     holding_count = int(len(holdings))
+    largest = _first_record(holdings.sort_values("weight", ascending=False))
+    concentration_score = float((holdings["weight"] ** 2).sum())
+    concentration_label = _concentration_label(largest.get("weight"), concentration_score, holding_count)
+    grade_distribution = _grade_distribution(holdings)
+    top_score_contributors = _portfolio_records(holdings, "weighted_meroq_score", 3)
+    top_risk_contributors = _portfolio_records(holdings, "weighted_downside_probability", 3)
+    weakest_holdings = _portfolio_records(holdings, "meroq_score", 3, ascending=True)
+    highest_risk_holdings = _portfolio_records(holdings, "risk_loss_gt_5pct", 3)
 
     portfolio_grade = score_to_grade(weighted_meroq_score)
     summary = {
@@ -144,7 +160,18 @@ def build_portfolio_view(scan_df: pd.DataFrame, weights_df: pd.DataFrame) -> tup
         "bullish_weight": _weighted_label_share(holdings, "final_signal", "Bullish"),
         "bearish_weight": _weighted_label_share(holdings, "final_signal", "Bearish"),
         "positive_sentiment_weight": _weighted_label_share(holdings, "sentiment_label", "Positive"),
-        "high_risk_weight": float(holdings.loc[holdings.get("risk_label", "").astype(str).str.contains("High|Elevated", case=False, na=False), "weight"].sum()) if "risk_label" in holdings else 0.0,
+        "high_risk_weight": _high_risk_weight(holdings),
+        # 1.9.3 command-center fields.
+        "largest_position_ticker": largest.get("ticker"),
+        "largest_position_weight": largest.get("weight", 0.0),
+        "concentration_score": concentration_score,
+        "concentration_label": concentration_label,
+        "portfolio_health_label": _portfolio_health_label(weighted_meroq_score, concentration_label),
+        "grade_distribution": grade_distribution,
+        "top_score_contributors": top_score_contributors,
+        "top_risk_contributors": top_risk_contributors,
+        "weakest_holdings": weakest_holdings,
+        "highest_risk_holdings": highest_risk_holdings,
     }
 
     # Backward-compatible aliases retained for existing app/report code.
@@ -152,6 +179,7 @@ def build_portfolio_view(scan_df: pd.DataFrame, weights_df: pd.DataFrame) -> tup
     summary["portfolio_meroq_score"] = weighted_meroq_score
     summary["portfolio_risk_label"] = _portfolio_risk_label(summary)
     summary["portfolio_signal_label"] = _portfolio_signal_label(summary)
+    summary["portfolio_alerts"] = build_portfolio_alerts(summary)
 
     display_order = [
         "ticker",
@@ -171,6 +199,9 @@ def build_portfolio_view(scan_df: pd.DataFrame, weights_df: pd.DataFrame) -> tup
         "sentiment_grade",
         "model_confidence_grade",
         "weighted_meroq_score",
+        "score_contribution_share",
+        "downside_contribution_share",
+        "exposure_note",
     ]
     available = [col for col in display_order if col in holdings.columns]
     extra = [col for col in holdings.columns if col not in available]
@@ -178,10 +209,88 @@ def build_portfolio_view(scan_df: pd.DataFrame, weights_df: pd.DataFrame) -> tup
     return holdings, summary
 
 
+def build_portfolio_alerts(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return concise command-center cards for the portfolio page."""
+    if not summary or int(summary.get("holding_count", 0) or 0) == 0:
+        return []
+
+    alerts: list[dict[str, Any]] = []
+    concentration = str(summary.get("concentration_label", "Balanced"))
+    largest_ticker = summary.get("largest_position_ticker") or "largest position"
+    largest_weight = float(summary.get("largest_position_weight", 0.0) or 0.0)
+    if concentration == "Concentrated":
+        alerts.append(
+            {
+                "title": "Concentration needs attention",
+                "severity": "warning",
+                "ticker": largest_ticker,
+                "metric": largest_weight,
+                "detail": f"{largest_ticker} is the largest position at {largest_weight:.1%}. Review whether one holding is carrying too much of the portfolio read.",
+            }
+        )
+    else:
+        alerts.append(
+            {
+                "title": "Allocation is reasonably spread",
+                "severity": "positive" if concentration == "Diversified" else "neutral",
+                "ticker": largest_ticker,
+                "metric": largest_weight,
+                "detail": f"Largest position is {largest_ticker} at {largest_weight:.1%}; concentration label is {concentration.lower()}.",
+            }
+        )
+
+    risk_contributors = summary.get("top_risk_contributors") or []
+    if risk_contributors:
+        top_risk = risk_contributors[0]
+        risk_share = float(top_risk.get("downside_contribution_share", 0.0) or 0.0)
+        alerts.append(
+            {
+                "title": "Top downside driver",
+                "severity": "warning" if risk_share >= 0.35 else "neutral",
+                "ticker": top_risk.get("ticker"),
+                "metric": risk_share,
+                "detail": f"{top_risk.get('ticker')} contributes {risk_share:.1%} of weighted downside probability in this scan.",
+            }
+        )
+
+    weakest = summary.get("weakest_holdings") or []
+    if weakest:
+        weak = weakest[0]
+        score = float(weak.get("meroq_score", 0.0) or 0.0)
+        alerts.append(
+            {
+                "title": "Weakest current setup",
+                "severity": "negative" if score < 42 else "neutral",
+                "ticker": weak.get("ticker"),
+                "metric": score,
+                "detail": f"{weak.get('ticker')} has the lowest Meroq Score in the portfolio at {score:.1f}/100.",
+            }
+        )
+
+    grade_distribution = summary.get("grade_distribution") or []
+    caution_weight = sum(float(row.get("weight", 0.0) or 0.0) for row in grade_distribution if row.get("grade") in {"D", "F"})
+    alerts.append(
+        {
+            "title": "Caution-grade exposure",
+            "severity": "warning" if caution_weight >= 0.25 else "positive",
+            "metric": caution_weight,
+            "detail": f"D/F grade exposure is {caution_weight:.1%} of scanned portfolio weight.",
+        }
+    )
+    return alerts
+
+
 def _weighted_label_share(df: pd.DataFrame, column: str, label: str) -> float:
     if column not in df.columns or "weight" not in df.columns:
         return 0.0
     return float(df.loc[df[column].astype(str).str.lower() == label.lower(), "weight"].sum())
+
+
+def _high_risk_weight(holdings: pd.DataFrame) -> float:
+    if "risk_label" not in holdings:
+        return 0.0
+    mask = holdings["risk_label"].astype(str).str.contains("High|Elevated", case=False, na=False)
+    return float(holdings.loc[mask, "weight"].sum())
 
 
 def _portfolio_risk_label(summary: dict) -> str:
@@ -223,6 +332,17 @@ def _empty_summary() -> dict:
         "high_risk_weight": 0.0,
         "portfolio_risk_label": "Unavailable",
         "portfolio_signal_label": "Unavailable",
+        "largest_position_ticker": None,
+        "largest_position_weight": 0.0,
+        "concentration_score": 0.0,
+        "concentration_label": "Unavailable",
+        "portfolio_health_label": "Unavailable",
+        "grade_distribution": [],
+        "top_score_contributors": [],
+        "top_risk_contributors": [],
+        "weakest_holdings": [],
+        "highest_risk_holdings": [],
+        "portfolio_alerts": [],
     }
 
 
@@ -232,10 +352,141 @@ def portfolio_summary_sentence(summary: dict) -> str:
     if not summary or holding_count == 0:
         return "Portfolio view is unavailable until at least one position is scanned successfully."
     score = float(summary.get("weighted_meroq_score", summary.get("portfolio_meroq_score", 0.0)) or 0.0)
+    concentration = summary.get("concentration_label", "balanced")
+    largest = summary.get("largest_position_ticker") or "largest holding"
+    largest_weight = float(summary.get("largest_position_weight", 0.0) or 0.0)
     return (
         f"The scanned portfolio has a {summary.get('portfolio_signal_label', 'Neutral').lower()} signal profile, "
         f"a {summary.get('portfolio_grade', 'N/A')} portfolio grade, "
         f"a Meroq score of {score:.1f}/100, "
         f"weighted up probability of {float(summary.get('weighted_up_probability', 0.0)):.1%}, "
-        f"and {summary.get('portfolio_risk_label', 'balanced risk').lower()}."
+        f"{summary.get('portfolio_risk_label', 'balanced risk').lower()}, "
+        f"and {str(concentration).lower()} allocation with {largest} at {largest_weight:.1%}."
     )
+
+
+def _share_series(series: pd.Series, total: float) -> pd.Series:
+    if total <= 0:
+        return pd.Series([0.0] * len(series), index=series.index)
+    return pd.to_numeric(series, errors="coerce").fillna(0.0) / total
+
+
+def _safe_sum(series: pd.Series) -> float:
+    return float(pd.to_numeric(series, errors="coerce").fillna(0.0).sum())
+
+
+def _first_record(df: pd.DataFrame) -> dict[str, Any]:
+    if df is None or df.empty:
+        return {}
+    return df.iloc[0].to_dict()
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not np.isfinite(number):
+        return default
+    return number
+
+
+def _concentration_label(largest_weight: Any, concentration_score: float, holding_count: int) -> str:
+    largest = _safe_float(largest_weight)
+    if holding_count <= 1 or largest >= 0.35 or concentration_score >= 0.22:
+        return "Concentrated"
+    if largest <= 0.18 and concentration_score <= 0.14 and holding_count >= 6:
+        return "Diversified"
+    return "Moderate"
+
+
+def _portfolio_health_label(weighted_meroq_score: float, concentration_label: str) -> str:
+    if weighted_meroq_score >= 62 and concentration_label != "Concentrated":
+        return "Constructive command center"
+    if weighted_meroq_score <= 43:
+        return "Caution command center"
+    if concentration_label == "Concentrated":
+        return "Concentration-led read"
+    return "Balanced command center"
+
+
+def _grade_distribution(holdings: pd.DataFrame) -> list[dict[str, Any]]:
+    if "meroq_grade" not in holdings.columns:
+        return []
+    rows: list[dict[str, Any]] = []
+    for grade in GRADE_ORDER:
+        if grade == "N/A":
+            mask = ~holdings["meroq_grade"].astype(str).str.upper().isin(GRADE_ORDER[:-1])
+        else:
+            mask = holdings["meroq_grade"].astype(str).str.upper() == grade
+        count = int(mask.sum())
+        weight = float(holdings.loc[mask, "weight"].sum()) if "weight" in holdings else 0.0
+        if count or weight:
+            rows.append({"grade": grade, "count": count, "weight": weight, "label": grade_label(grade) if grade != "N/A" else "Unrated"})
+    return rows
+
+
+def _portfolio_records(holdings: pd.DataFrame, sort_column: str, limit: int, ascending: bool = False) -> list[dict[str, Any]]:
+    if holdings.empty or sort_column not in holdings.columns:
+        return []
+    columns = [
+        "ticker",
+        "weight",
+        "meroq_score",
+        "meroq_grade",
+        "final_signal",
+        "final_up_probability",
+        "risk_label",
+        "risk_loss_gt_5pct",
+        "sentiment_label",
+        "weighted_meroq_score",
+        "weighted_downside_probability",
+        "score_contribution_share",
+        "downside_contribution_share",
+        "exposure_note",
+    ]
+    available = [col for col in columns if col in holdings.columns]
+    ranked = holdings.sort_values(sort_column, ascending=ascending, na_position="last").head(limit)
+    records = []
+    for row in ranked[available].to_dict(orient="records"):
+        records.append({key: _json_safe(value) for key, value in row.items()})
+    return records
+
+
+def _holding_exposure_note(row: pd.Series) -> str:
+    parts: list[str] = []
+    weight = _safe_float(row.get("weight"))
+    score = _safe_float(row.get("meroq_score"), 50.0)
+    downside = _safe_float(row.get("risk_loss_gt_5pct"))
+    sentiment = str(row.get("sentiment_label", "")).lower()
+    if weight >= 0.25:
+        parts.append("large allocation")
+    if downside >= 0.32:
+        parts.append("downside driver")
+    if score < 42:
+        parts.append("weak score")
+    elif score >= 70:
+        parts.append("score support")
+    if "negative" in sentiment or "caution" in sentiment:
+        parts.append("news caution")
+    return ", ".join(parts) if parts else "balanced contributor"
+
+
+def _json_safe(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        return value if np.isfinite(value) else None
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        v = float(value)
+        return v if np.isfinite(v) else None
+    return value

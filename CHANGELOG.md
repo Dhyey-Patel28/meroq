@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.9.3 — Portfolio command center
+
+### Added
+- Added portfolio concentration labels, largest-position metadata, and a portfolio health label.
+- Added grade distribution, top Meroq score contributors, top downside contributors, weakest holdings, and highest-risk holding summaries to portfolio API output.
+- Added portfolio command-center insight cards and contributor lists to the Next.js portfolio page.
+- Added downside contribution share and exposure-note columns to holdings tables.
+- Added regression coverage for portfolio command-center fields.
+
+### Changed
+- Updated the portfolio summary sentence to include allocation concentration and the largest holding.
+- Updated frontend API types to accept nested API records and arrays in summary payloads.
+- Bumped API metadata to 1.9.3.
+
+### Notes
+- This release keeps the app free/local-first by deriving portfolio intelligence from existing watchlist scan outputs and user-supplied weights.
+
+
 ## 1.9.2 — Sentiment evaluation harness
 
 ### Added

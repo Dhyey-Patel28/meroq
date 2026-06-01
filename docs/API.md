@@ -110,3 +110,20 @@ Scans one ticker at a time for progressive frontend loading. It always returns a
 ## Meroq grade fields
 
 Ticker, watchlist, and portfolio responses may include grade fields such as `meroq_grade`, `meroq_grade_label`, `momentum_grade`, `risk_grade`, `sentiment_grade`, `model_confidence_grade`, and `data_quality_grade`. These are local research labels for scanning and triage, not buy/sell recommendations.
+
+
+## Portfolio command-center fields
+
+Release 1.9.3 expands `POST /portfolio/analyze` with nested summary fields for production-style portfolio triage:
+
+- `largest_position_ticker` and `largest_position_weight`
+- `concentration_score` and `concentration_label`
+- `portfolio_health_label`
+- `grade_distribution`
+- `top_score_contributors`
+- `top_risk_contributors`
+- `weakest_holdings`
+- `highest_risk_holdings`
+- `portfolio_alerts`
+
+Holdings also include `score_contribution_share`, `downside_contribution_share`, and `exposure_note` when the required source fields are available.

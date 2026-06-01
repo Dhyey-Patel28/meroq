@@ -65,3 +65,70 @@ def test_build_portfolio_view_summary() -> None:
     assert round(float(holdings["weight"].sum()), 6) == 1.0
     assert round(summary["weighted_meroq_score"], 2) == 56.25
     assert summary["holding_count"] == 2
+
+
+def test_build_portfolio_view_adds_command_center_insights() -> None:
+    scan = pd.DataFrame(
+        [
+            {
+                "ticker": "AAPL",
+                "status": "ok",
+                "latest_close": 100,
+                "return_1d": 0.01,
+                "final_up_probability": 0.62,
+                "sentiment_score": 0.2,
+                "risk_loss_gt_5pct": 0.12,
+                "risk_positive_probability": 0.65,
+                "risk_median_return": 0.03,
+                "meroq_score": 72,
+                "meroq_grade": "B",
+                "final_signal": "Bullish",
+                "sentiment_label": "Positive",
+                "risk_label": "Balanced risk profile",
+            },
+            {
+                "ticker": "MARA",
+                "status": "ok",
+                "latest_close": 20,
+                "return_1d": -0.02,
+                "final_up_probability": 0.38,
+                "sentiment_score": -0.25,
+                "risk_loss_gt_5pct": 0.52,
+                "risk_positive_probability": 0.31,
+                "risk_median_return": -0.04,
+                "meroq_score": 31,
+                "meroq_grade": "F",
+                "final_signal": "Bearish",
+                "sentiment_label": "Cautionary",
+                "risk_label": "High downside risk",
+            },
+            {
+                "ticker": "MSFT",
+                "status": "ok",
+                "latest_close": 220,
+                "return_1d": 0.0,
+                "final_up_probability": 0.55,
+                "sentiment_score": 0.05,
+                "risk_loss_gt_5pct": 0.16,
+                "risk_positive_probability": 0.55,
+                "risk_median_return": 0.01,
+                "meroq_score": 58,
+                "meroq_grade": "C",
+                "final_signal": "Neutral",
+                "sentiment_label": "Neutral",
+                "risk_label": "Balanced risk profile",
+            },
+        ]
+    )
+    weights = parse_portfolio_weights(["AAPL", "MARA", "MSFT"], "AAPL:50,MARA:30,MSFT:20")
+    holdings, summary = build_portfolio_view(scan, weights)
+
+    assert "exposure_note" in holdings.columns
+    assert "downside_contribution_share" in holdings.columns
+    assert summary["largest_position_ticker"] == "AAPL"
+    assert summary["largest_position_weight"] == 0.5
+    assert summary["concentration_label"] == "Concentrated"
+    assert summary["top_risk_contributors"][0]["ticker"] == "MARA"
+    assert summary["weakest_holdings"][0]["ticker"] == "MARA"
+    assert any(row["grade"] == "F" and row["weight"] > 0 for row in summary["grade_distribution"])
+    assert any(alert["title"] == "Top downside driver" for alert in summary["portfolio_alerts"])
