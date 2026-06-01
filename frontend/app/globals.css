@@ -1645,3 +1645,42 @@ code {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* 1.9.5 watchlist screener command center */
+.watchlist-command-grid,
+.watchlist-queue-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.watchlist-queue-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.watchlist-queue-card {
+  min-width: 0;
+}
+
+.table-note {
+  display: inline-block;
+  max-width: 34rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .watchlist-command-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .watchlist-command-grid,
+  .watchlist-queue-grid {
+    grid-template-columns: 1fr;
+  }
+}

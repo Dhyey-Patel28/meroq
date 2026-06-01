@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.9.5 — Watchlist screener command center
+
+### Added
+- Added watchlist bucket labels for Research queue, Momentum watch, Risk review, Low priority, and Data issue.
+- Added research-priority scores, evidence counts, and plain-English scan notes to watchlist rows.
+- Added command-center summary fields for top research candidates, risk-review rows, sentiment-watch rows, data issues, grade distribution, and scan alerts.
+- Upgraded the Next.js watchlist page into a screener-style workflow with insight cards, queue lists, bucket filters, and a richer ranked table.
+- Added regression coverage for watchlist bucket classification and command-center summaries.
+
+### Changed
+- Bumped API metadata to 1.9.5 and frontend package version to 0.3.10.
+- Preserved existing progressive scan behavior while adding richer row metadata for each completed ticker.
+
+### Notes
+- The new queues are research-triage labels, not buy/sell recommendations. They use existing local model, sentiment, and risk outputs only.
+
 ## 1.9.4 — Portfolio scenario lab
 
 ### Added

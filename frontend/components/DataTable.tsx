@@ -23,13 +23,13 @@ function humanizeColumn(column: string) {
 
 function toneFromText(value: string): "neutral" | "positive" | "negative" | "warning" {
   const text = value.toLowerCase();
-  if (text.includes("bullish") || text.includes("positive") || text.includes("constructive") || text.includes("low")) {
+  if (text.includes("bullish") || text.includes("positive") || text.includes("constructive") || text.includes("research queue") || text.includes("low")) {
     return "positive";
   }
-  if (text.includes("bearish") || text.includes("negative") || text.includes("high") || text.includes("elevated") || text.includes("failed")) {
+  if (text.includes("bearish") || text.includes("negative") || text.includes("high") || text.includes("elevated") || text.includes("risk review") || text.includes("failed") || text.includes("data issue")) {
     return "negative";
   }
-  if (text.includes("neutral") || text.includes("balanced") || text.includes("cautious") || text.includes("skipped")) {
+  if (text.includes("neutral") || text.includes("balanced") || text.includes("momentum watch") || text.includes("cautious") || text.includes("skipped")) {
     return "warning";
   }
   return "neutral";
@@ -37,9 +37,9 @@ function toneFromText(value: string): "neutral" | "positive" | "negative" | "war
 
 function symbolForText(value: string) {
   const text = value.toLowerCase();
-  if (text.includes("bullish") || text.includes("positive") || text.includes("constructive") || text === "ok") return "▲";
-  if (text.includes("bearish") || text.includes("negative") || text.includes("high") || text === "failed") return "▼";
-  if (text.includes("neutral") || text.includes("balanced") || text.includes("skipped")) return "●";
+  if (text.includes("bullish") || text.includes("positive") || text.includes("constructive") || text.includes("research queue") || text === "ok") return "▲";
+  if (text.includes("bearish") || text.includes("negative") || text.includes("high") || text.includes("risk review") || text === "failed") return "▼";
+  if (text.includes("neutral") || text.includes("balanced") || text.includes("momentum watch") || text.includes("skipped")) return "●";
   return "•";
 }
 
@@ -73,12 +73,12 @@ function renderDecoratedCell(column: string, value: ApiRecord[keyof ApiRecord], 
     return <StatusPill label={`${symbolForText(text)} ${label}`} tone={toneFromText(text)} />;
   }
 
-  if (["final_signal", "sentiment_label", "risk_label", "allocation_review"].includes(column) && value) {
+  if (["final_signal", "sentiment_label", "risk_label", "allocation_review", "watchlist_bucket"].includes(column) && value) {
     const text = String(value);
     return <StatusPill label={`${symbolForText(text)} ${text}`} tone={toneFromText(text)} />;
   }
 
-  if (column === "error" && value) {
+  if (["error", "scan_note"].includes(column) && value) {
     const text = String(value);
     return (
       <span className="table-note" title={text}>

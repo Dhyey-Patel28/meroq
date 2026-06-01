@@ -6,6 +6,7 @@ import { StockDetailModal } from "@/components/StockDetailModal";
 import { ErrorBox } from "@/components/StateBlocks";
 import { MetricCard } from "@/components/MetricCard";
 import { PageShell } from "@/components/PageShell";
+import { StatusPill } from "@/components/StatusPill";
 import { formatNumber, scanWatchlistOne, type ApiRecord, type WatchlistSinglePayload } from "@/lib/api";
 import {
   DEFAULT_WATCHLIST_PRESETS,
@@ -17,35 +18,77 @@ import {
 const columns = [
   "status",
   "ticker",
+  "watchlist_bucket",
+  "research_priority",
   "latest_close",
-  "final_signal",
   "final_up_probability",
   "meroq_grade",
   "sentiment_label",
   "risk_label",
-  "meroq_score",
-  "note",
+  "risk_loss_gt_5pct",
+  "evidence_count",
+  "scan_note",
 ];
+
+type WatchlistFilter = "all" | "ready" | "research" | "momentum" | "risk" | "issues";
 
 const CUSTOM_PRESET_KEY = "meroq.watchlist.presets.v1";
 
+function rowStatus(row: ApiRecord) {
+  return String(row.status ?? "").toLowerCase();
+}
+
+function bucket(row: ApiRecord) {
+  return String(row.watchlist_bucket ?? "");
+}
+
+function isReady(row: ApiRecord) {
+  return rowStatus(row) === "ok";
+}
+
+function isIssue(row: ApiRecord) {
+  return rowStatus(row) === "failed" || bucket(row) === "Data issue";
+}
+
+function byPriority(rows: ApiRecord[]) {
+  return [...rows].sort((a, b) => Number(b.research_priority ?? b.meroq_score ?? -Infinity) - Number(a.research_priority ?? a.meroq_score ?? -Infinity));
+}
+
 function buildSummary(rows: ApiRecord[]) {
-  const okRows = rows.filter((row) => String(row.status ?? "").toLowerCase() === "ok");
+  const okRows = rows.filter(isReady);
+  const issueRows = rows.filter(isIssue);
+  const researchRows = okRows.filter((row) => bucket(row) === "Research queue");
+  const momentumRows = okRows.filter((row) => bucket(row) === "Momentum watch");
+  const riskRows = okRows.filter((row) => bucket(row) === "Risk review");
+  const lowPriorityRows = okRows.filter((row) => bucket(row) === "Low priority");
+  const averageScore = okRows.length ? okRows.reduce((sum, row) => sum + Number(row.meroq_score ?? 0), 0) / okRows.length : null;
+  const topCandidates = byPriority(researchRows.length ? researchRows : okRows).slice(0, 5);
+
   return {
     scanned: rows.length,
     ready: okRows.length,
-    issues: rows.length - okRows.length,
+    issues: issueRows.length,
     bullish: okRows.filter((row) => String(row.final_signal ?? "").toLowerCase() === "bullish").length,
-    highRisk: okRows.filter((row) => String(row.risk_label ?? "").toLowerCase().includes("high")).length,
+    highRisk: riskRows.length,
+    research: researchRows.length,
+    momentum: momentumRows.length,
+    risk: riskRows.length,
+    lowPriority: lowPriorityRows.length,
+    averageScore,
+    topCandidates,
+    topRisk: [...riskRows].sort((a, b) => Number(b.risk_loss_gt_5pct ?? -Infinity) - Number(a.risk_loss_gt_5pct ?? -Infinity)).slice(0, 5),
+    sentimentWatch: okRows
+      .filter((row) => String(row.sentiment_label ?? "").toLowerCase().match(/caution|negative|bearish/))
+      .slice(0, 5),
   };
 }
 
 function sortRows(rows: ApiRecord[]) {
   return [...rows].sort((a, b) => {
-    const aOk = String(a.status ?? "") === "ok" ? 1 : 0;
-    const bOk = String(b.status ?? "") === "ok" ? 1 : 0;
+    const aOk = isReady(a) ? 1 : 0;
+    const bOk = isReady(b) ? 1 : 0;
     if (aOk !== bOk) return bOk - aOk;
-    return Number(b.meroq_score ?? -Infinity) - Number(a.meroq_score ?? -Infinity);
+    return Number(b.research_priority ?? b.meroq_score ?? -Infinity) - Number(a.research_priority ?? a.meroq_score ?? -Infinity);
   });
 }
 
@@ -65,6 +108,61 @@ function persistCustomPresets(presets: WatchlistPreset[]) {
   window.localStorage.setItem(CUSTOM_PRESET_KEY, JSON.stringify(presets));
 }
 
+function toneForSeverity(value: unknown): "neutral" | "positive" | "negative" | "warning" {
+  const text = String(value ?? "").toLowerCase();
+  if (text.includes("positive") || text.includes("research")) return "positive";
+  if (text.includes("negative") || text.includes("risk") || text.includes("issue")) return "warning";
+  return "neutral";
+}
+
+function CommandInsight({ title, detail, ticker, severity = "neutral" }: { title: string; detail: string; ticker?: string; severity?: string }) {
+  const tone = toneForSeverity(severity);
+  return (
+    <section className={`insight-card tone-${tone}`}>
+      <div className="card-heading-row">
+        <div>
+          <p className="status-label">Screener insight</p>
+          <h3>{title}</h3>
+        </div>
+        {ticker ? <StatusPill label={ticker} tone={tone} /> : null}
+      </div>
+      <p className="muted">{detail}</p>
+    </section>
+  );
+}
+
+function ScreenerList({ title, rows, metric }: { title: string; rows: ApiRecord[]; metric: "priority" | "risk" | "score" }) {
+  return (
+    <section className="card contributor-card watchlist-queue-card">
+      <div className="card-heading-row">
+        <h3>{title}</h3>
+        <span className="muted small">Top {rows.length || 0}</span>
+      </div>
+      {rows.length ? (
+        <div className="contributor-list">
+          {rows.map((row) => (
+            <div className="contributor-row" key={`${title}-${String(row.ticker)}`}>
+              <div>
+                <strong>{String(row.ticker)}</strong>
+                <p className="muted small">{String(row.scan_note ?? row.watchlist_bucket ?? "Watchlist row")}</p>
+              </div>
+              <div className="contributor-metric">
+                {metric === "risk"
+                  ? `${((Number(row.risk_loss_gt_5pct ?? 0) || 0) * 100).toFixed(1)}%`
+                  : metric === "priority"
+                    ? String(row.research_priority ?? "N/A")
+                    : formatNumber(row.meroq_score)}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">Run a scan to populate this queue.</p>
+      )}
+    </section>
+  );
+}
+
 export default function WatchlistPage() {
   const [tickers, setTickers] = useState("AAPL,MSFT,NVDA,GOOGL,SPY");
   const [period, setPeriod] = useState("5y");
@@ -74,7 +172,7 @@ export default function WatchlistPage() {
   const [loading, setLoading] = useState(false);
   const [currentTicker, setCurrentTicker] = useState("");
   const [selectedRow, setSelectedRow] = useState<ApiRecord | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"all" | "ready" | "issues" | "high-risk">("all");
+  const [statusFilter, setStatusFilter] = useState<WatchlistFilter>("all");
   const [copyMessage, setCopyMessage] = useState("");
   const [presetName, setPresetName] = useState("");
   const [customPresets, setCustomPresets] = useState<WatchlistPreset[]>([]);
@@ -93,30 +191,30 @@ export default function WatchlistPage() {
         note:
           String(row.status ?? "") === "failed"
             ? row.error ?? "Data issue"
-            : row.headline_count
-              ? `${String(row.headline_count)} headlines reviewed`
-              : "Ready",
+            : row.scan_note ?? (row.headline_count ? `${String(row.headline_count)} headlines reviewed` : "Ready"),
       })),
     [rows],
   );
 
   const filteredRows = useMemo(() => {
-    if (statusFilter === "ready") return sortedRows.filter((row) => String(row.status ?? "") === "ok");
-    if (statusFilter === "issues") return sortedRows.filter((row) => String(row.status ?? "") === "failed");
-    if (statusFilter === "high-risk") {
-      return sortedRows.filter((row) => String(row.risk_label ?? "").toLowerCase().includes("high"));
-    }
+    if (statusFilter === "ready") return sortedRows.filter(isReady);
+    if (statusFilter === "issues") return sortedRows.filter(isIssue);
+    if (statusFilter === "research") return sortedRows.filter((row) => bucket(row) === "Research queue");
+    if (statusFilter === "momentum") return sortedRows.filter((row) => bucket(row) === "Momentum watch");
+    if (statusFilter === "risk") return sortedRows.filter((row) => bucket(row) === "Risk review");
     return sortedRows;
   }, [sortedRows, statusFilter]);
 
-  const readyTickers = sortedRows.filter((row) => String(row.status ?? "") === "ok").map((row) => String(row.ticker));
-  const issueTickers = sortedRows.filter((row) => String(row.status ?? "") === "failed").map((row) => String(row.ticker));
+  const readyTickers = sortedRows.filter(isReady).map((row) => String(row.ticker));
+  const issueTickers = sortedRows.filter(isIssue).map((row) => String(row.ticker));
 
-  const top = sortedRows
-    .filter((row) => String(row.status ?? "") === "ok")
+  const top = summary.topCandidates
     .slice(0, 3)
     .map((row) => String(row.ticker))
     .join(", ");
+  const topCandidate = summary.topCandidates[0];
+  const topRisk = summary.topRisk[0];
+  const topSentiment = summary.sentimentWatch[0];
 
   function loadPreset(preset: WatchlistPreset) {
     setTickers(formatTickerList(preset.tickers));
@@ -207,9 +305,9 @@ export default function WatchlistPage() {
   return (
     <PageShell>
       <section className="hero compact-hero">
-        <p className="eyebrow">Watchlist scan</p>
-        <h1>Rank a working watchlist as rows finish loading.</h1>
-        <p>Save reusable ticker sets, clean messy pasted lists, and scan only the symbols that are ready.</p>
+        <p className="eyebrow">Watchlist screener</p>
+        <h1>Turn a messy ticker list into a focused research queue.</h1>
+        <p>Save reusable ticker sets, clean pasted lists, and separate candidates, momentum watches, risk reviews, and data issues as rows finish loading.</p>
       </section>
 
       <form className="card form" onSubmit={onSubmit}>
@@ -353,18 +451,52 @@ export default function WatchlistPage() {
       {rows.length ? (
         <section className="grid cols-4" style={{ marginTop: 18 }}>
           <MetricCard label="Completed" value={String(summary.scanned)} helper="Rows returned so far" />
-          <MetricCard label="Ready" value={String(summary.ready)} helper="Usable analyses" tone="positive" />
-          <MetricCard label="Top grade" value={String(sortedRows.find((row) => row.meroq_grade)?.meroq_grade ?? "N/A")} helper="Best currently ranked row" />
-          <MetricCard label="Issues" value={String(summary.issues)} helper="Skipped or unavailable" tone={summary.issues ? "warning" : "neutral"} />
-          <MetricCard label="Bullish" value={String(summary.bullish)} helper={`High risk names: ${summary.highRisk}`} />
+          <MetricCard label="Research queue" value={String(summary.research)} helper="Highest-priority candidates" tone="positive" />
+          <MetricCard label="Risk review" value={String(summary.risk)} helper="Needs caution before deep dive" tone={summary.risk ? "warning" : "neutral"} />
+          <MetricCard label="Avg score" value={summary.averageScore === null ? "N/A" : formatNumber(summary.averageScore)} helper={`Ready: ${summary.ready} · Issues: ${summary.issues}`} />
         </section>
       ) : null}
 
       {rows.length ? (
         <section className="card callout-card" style={{ marginTop: 18 }}>
           <p className="status-label">Quick read</p>
-          <h2>Highest-ranked ready names: {top || "Still loading"}</h2>
-          <p className="muted">Use filters for cleanup, export visible rows as CSV, or copy ready/issue tickers for the next scan.</p>
+          <h2>Highest-priority ready names: {top || "Still loading"}</h2>
+          <p className="muted">The screener now separates research candidates from momentum watches, risk reviews, low-priority rows, and data cleanup items.</p>
+        </section>
+      ) : null}
+
+      {rows.length ? (
+        <section className="watchlist-command-grid" style={{ marginTop: 18 }}>
+          <CommandInsight
+            title="Best research candidate"
+            ticker={topCandidate ? String(topCandidate.ticker) : undefined}
+            severity="positive"
+            detail={topCandidate ? String(topCandidate.scan_note ?? "Highest priority row in this scan.") : "No research candidate has emerged yet."}
+          />
+          <CommandInsight
+            title="Risk review queue"
+            ticker={topRisk ? String(topRisk.ticker) : undefined}
+            severity={topRisk ? "warning" : "neutral"}
+            detail={topRisk ? String(topRisk.scan_note ?? "Review risk before deeper research.") : "No ready rows currently require a risk-review queue."}
+          />
+          <CommandInsight
+            title="Sentiment watch"
+            ticker={topSentiment ? String(topSentiment.ticker) : undefined}
+            severity={topSentiment ? "warning" : "neutral"}
+            detail={topSentiment ? String(topSentiment.scan_note ?? "Recent headlines need source inspection.") : "No cautionary sentiment rows are visible yet."}
+          />
+          <CommandInsight
+            title="Data cleanup"
+            severity={summary.issues ? "warning" : "neutral"}
+            detail={summary.issues ? `${summary.issues} ticker${summary.issues === 1 ? "" : "s"} could not be analyzed.` : "No failed rows in this scan so far."}
+          />
+        </section>
+      ) : null}
+
+      {rows.length ? (
+        <section className="watchlist-queue-grid" style={{ marginTop: 18 }}>
+          <ScreenerList title="Research queue" rows={summary.topCandidates} metric="priority" />
+          <ScreenerList title="Risk review" rows={summary.topRisk} metric="risk" />
         </section>
       ) : null}
 
@@ -380,14 +512,16 @@ export default function WatchlistPage() {
             {[
               ["all", `All (${sortedRows.length})`],
               ["ready", `Ready (${summary.ready})`],
+              ["research", `Research (${summary.research})`],
+              ["momentum", `Momentum (${summary.momentum})`],
+              ["risk", `Risk review (${summary.risk})`],
               ["issues", `Issues (${summary.issues})`],
-              ["high-risk", `High risk (${summary.highRisk})`],
             ].map(([value, label]) => (
               <button
                 className={`filter-chip ${statusFilter === value ? "active" : ""}`}
                 type="button"
                 key={value}
-                onClick={() => setStatusFilter(value as typeof statusFilter)}
+                onClick={() => setStatusFilter(value as WatchlistFilter)}
               >
                 {label}
               </button>
@@ -420,24 +554,24 @@ export default function WatchlistPage() {
       <section className="card" style={{ marginTop: 18 }}>
         <div className="card-heading-row">
           <div>
-            <h2>Ranked scan</h2>
-            <p className="muted small">Searchable, scrollable, and row-clickable.</p>
+            <h2>Ranked screener</h2>
+            <p className="muted small">Searchable, scrollable, row-clickable, and bucketed by research priority.</p>
           </div>
-          {sortedRows.length ? <span className="muted small">Top score: {formatNumber(sortedRows[0]?.meroq_score)}</span> : null}
+          {sortedRows.length ? <span className="muted small">Top priority: {String(sortedRows[0]?.research_priority ?? "N/A")}</span> : null}
         </div>
         <DataTable
           rows={filteredRows}
           columns={columns}
-          searchPlaceholder="Search tickers, scores, signals, or issue notes…"
+          searchPlaceholder="Search tickers, buckets, scores, signals, or notes…"
           onRowClick={(row) => setSelectedRow(row)}
           rowHint="Row details"
-          exportFilename="meroq-watchlist-scan.csv"
+          exportFilename="meroq-watchlist-screener.csv"
           legend={
             <div className="legend-row">
-              <span className="legend-pill positive">▲ Bullish / positive</span>
-              <span className="legend-pill warning">● Neutral / balanced</span>
-              <span className="legend-pill negative">▼ Bearish / higher concern</span>
-              <span className="legend-pill neutral">⚠ Data issue</span>
+              <span className="legend-pill positive">▲ Research queue</span>
+              <span className="legend-pill warning">● Momentum / review</span>
+              <span className="legend-pill negative">▼ Risk or data issue</span>
+              <span className="legend-pill neutral">• Lower priority</span>
             </div>
           }
         />

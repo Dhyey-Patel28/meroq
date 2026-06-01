@@ -17,6 +17,7 @@ For each symbol, Meroq runs a fast local pipeline:
 5. Optionally fetch recent headlines and score sentiment.
 6. Optionally run a lightweight Monte Carlo risk simulation.
 7. Combine the outputs into a transparent 0–100 Meroq Score.
+8. Add a screener bucket, research-priority score, evidence count, and scan note for triage.
 
 ## Meroq Score
 
@@ -43,3 +44,30 @@ For responsive local use:
 ## Limitations
 
 The watchlist scan is still local and sequential. It is intentionally conservative to keep the project easy to understand. If the app later needs to scan hundreds of tickers, the next step is a scheduled data-refresh layer and a database-backed batch pipeline, not a bigger Streamlit loop.
+
+
+## Screener buckets
+
+Release 1.9.5 adds queue labels so the watchlist behaves more like a practical screener:
+
+- **Research queue** — stronger local score, grade, and up-probability setup.
+- **Momentum watch** — constructive enough to monitor, but not the strongest candidate.
+- **Risk review** — high downside risk, cautionary sentiment, weak grade, or low score needs inspection first.
+- **Low priority** — usable data, but currently lower priority than stronger names.
+- **Data issue** — provider/model could not produce a usable row for the symbol.
+
+Each successful row also includes `research_priority`, `evidence_count`, and `scan_note`. These labels are meant to help decide what to inspect next. They are not recommendations to buy, sell, or rebalance.
+
+## Command-center summary
+
+The watchlist summary now exposes:
+
+- top research candidates
+- momentum-watch rows
+- risk-review rows
+- sentiment-watch rows
+- data issues
+- grade distribution
+- scan alerts
+
+The Next.js watchlist page uses those same concepts locally as rows stream in one ticker at a time.

@@ -56,6 +56,248 @@ def compute_meroq_score(
     return round(_clip_score(score), 2)
 
 
+_GRADE_RANK = {"A": 5, "B": 4, "C": 3, "D": 2, "F": 1}
+
+
+def _safe_float(value: object, default: float = 0.0) -> float:
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+    return number if np.isfinite(number) else default
+
+
+def _grade_rank(value: object) -> int:
+    return _GRADE_RANK.get(str(value or "").upper(), 0)
+
+
+def _watchlist_bucket(row: dict) -> str:
+    """Classify a scanned symbol into a plain-English screener queue."""
+    if str(row.get("status", "")).lower() != "ok":
+        return "Data issue"
+
+    score = _safe_float(row.get("meroq_score"))
+    risk_loss = _safe_float(row.get("risk_loss_gt_5pct"), default=np.nan)
+    up_probability = _safe_float(row.get("final_up_probability"), default=0.5)
+    grade = str(row.get("meroq_grade") or "").upper()
+    sentiment = str(row.get("sentiment_label") or "").lower()
+    risk_label_text = str(row.get("risk_label") or "").lower()
+
+    high_risk = "high" in risk_label_text or (np.isfinite(risk_loss) and risk_loss >= 0.42)
+    cautionary = any(token in sentiment for token in ["caution", "negative", "bearish"])
+
+    if high_risk or cautionary or score < 45 or grade in {"D", "F"}:
+        return "Risk review"
+    if score >= 70 and grade in {"A", "B"} and up_probability >= 0.56:
+        return "Research queue"
+    if up_probability >= 0.55 or score >= 62 or grade in {"B", "C"}:
+        return "Momentum watch"
+    return "Low priority"
+
+
+def _research_priority(row: dict) -> int:
+    """Return a stable 0-100 priority score for watchlist triage."""
+    if str(row.get("status", "")).lower() != "ok":
+        return 0
+
+    priority = _safe_float(row.get("meroq_score"))
+    priority += (_safe_float(row.get("final_up_probability"), 0.5) - 0.5) * 28.0
+    priority += _safe_float(row.get("sentiment_score")) * 8.0
+    priority += (_grade_rank(row.get("meroq_grade")) - 3) * 3.0
+
+    risk_loss = _safe_float(row.get("risk_loss_gt_5pct"), default=np.nan)
+    if np.isfinite(risk_loss):
+        priority -= risk_loss * 18.0
+
+    sentiment_label = str(row.get("sentiment_label") or "").lower()
+    if "caution" in sentiment_label or "negative" in sentiment_label:
+        priority -= 8.0
+
+    if _watchlist_bucket(row) == "Risk review":
+        priority -= 4.0
+
+    return int(round(max(0.0, min(100.0, priority))))
+
+
+def _scan_note(row: dict) -> str:
+    """Create a short note explaining why the row landed in its queue."""
+    if str(row.get("status", "")).lower() != "ok":
+        return str(row.get("error") or "Data unavailable")
+
+    ticker = str(row.get("ticker") or "This name")
+    bucket = str(row.get("watchlist_bucket") or _watchlist_bucket(row))
+    grade = str(row.get("meroq_grade") or "N/A")
+    score = _safe_float(row.get("meroq_score"))
+    up_probability = _safe_float(row.get("final_up_probability"), default=0.5)
+    risk_loss = _safe_float(row.get("risk_loss_gt_5pct"), default=np.nan)
+    sentiment = str(row.get("sentiment_label") or "Neutral")
+
+    if bucket == "Research queue":
+        return f"{ticker} combines a {grade} grade, {score:.0f} score, and {up_probability:.0%} up probability."
+    if bucket == "Momentum watch":
+        return f"{ticker} has a constructive setup but needs confirmation before deeper research."
+    if bucket == "Risk review":
+        risk_text = f" with {risk_loss:.0%} simulated >5% downside risk" if np.isfinite(risk_loss) else ""
+        return f"{ticker} needs review{risk_text}; sentiment is {sentiment}."
+    return f"{ticker} is currently lower priority versus stronger ranked names."
+
+
+def enrich_watchlist_row(row: dict) -> dict:
+    """Add screener-friendly classification fields to a scan row."""
+    enriched = dict(row)
+    if str(enriched.get("status", "")).lower() != "ok":
+        enriched.setdefault("watchlist_bucket", "Data issue")
+        enriched.setdefault("research_priority", 0)
+        enriched.setdefault("evidence_count", 0)
+        enriched.setdefault("scan_note", str(enriched.get("error") or "Data unavailable"))
+        return enriched
+
+    enriched["watchlist_bucket"] = _watchlist_bucket(enriched)
+    enriched["research_priority"] = _research_priority(enriched)
+    enriched["evidence_count"] = int(_safe_float(enriched.get("headline_count"), 0))
+    enriched["scan_note"] = _scan_note(enriched)
+    return enriched
+
+
+def _records_from_df(df: pd.DataFrame, limit: int = 5, sort_by: str = "research_priority", ascending: bool = False) -> list[dict]:
+    if df is None or df.empty:
+        return []
+    data = df.copy()
+    if sort_by in data.columns:
+        data = data.sort_values(sort_by, ascending=ascending, na_position="last")
+    return data.head(limit).replace({np.nan: None}).to_dict(orient="records")
+
+
+def _grade_distribution(df: pd.DataFrame) -> list[dict]:
+    if df is None or df.empty or "meroq_grade" not in df.columns:
+        return []
+    total = max(1, len(df))
+    rows = []
+    for grade in ["A", "B", "C", "D", "F", "N/A"]:
+        count = int((df["meroq_grade"].fillna("N/A").astype(str).str.upper() == grade).sum())
+        if count:
+            rows.append({"grade": grade, "count": count, "share": round(count / total, 4)})
+    return rows
+
+
+def build_watchlist_alerts(summary: dict) -> list[dict]:
+    """Build concise alert cards for the watchlist command center."""
+    alerts: list[dict] = []
+    ready_count = int(summary.get("ready_count", 0) or 0)
+    if ready_count == 0:
+        return alerts
+
+    top = (summary.get("top_research_candidates") or [])[:1]
+    if top:
+        row = top[0]
+        alerts.append(
+            {
+                "title": "Best research candidate",
+                "severity": "positive",
+                "ticker": row.get("ticker"),
+                "detail": row.get("scan_note") or "Highest priority row in the completed scan.",
+            }
+        )
+
+    risk_count = int(summary.get("risk_review_count", 0) or 0)
+    if risk_count:
+        risk = (summary.get("risk_review") or [])[:1]
+        alerts.append(
+            {
+                "title": "Risk review queue",
+                "severity": "warning",
+                "ticker": risk[0].get("ticker") if risk else None,
+                "detail": f"{risk_count} ready name{'s' if risk_count != 1 else ''} landed in risk review before deeper research.",
+            }
+        )
+
+    issue_count = int(summary.get("issue_count", 0) or 0)
+    if issue_count:
+        alerts.append(
+            {
+                "title": "Data cleanup needed",
+                "severity": "warning",
+                "ticker": None,
+                "detail": f"{issue_count} ticker{'s' if issue_count != 1 else ''} could not be analyzed and should be checked or replaced.",
+            }
+        )
+
+    if not alerts:
+        alerts.append(
+            {
+                "title": "Balanced scan",
+                "severity": "neutral",
+                "ticker": None,
+                "detail": "No single queue dominates this scan. Compare scores, risk, and news evidence before choosing deep dives.",
+            }
+        )
+    return alerts
+
+
+def summarize_watchlist_command_center(df: pd.DataFrame) -> dict:
+    """Summarize a completed or in-progress watchlist as a screener command center."""
+    if df is None or df.empty:
+        summary = {
+            "tickers_scanned": 0,
+            "ready_count": 0,
+            "issue_count": 0,
+            "research_queue_count": 0,
+            "momentum_watch_count": 0,
+            "risk_review_count": 0,
+            "low_priority_count": 0,
+            "average_meroq_score": None,
+            "best_candidate_ticker": None,
+            "grade_distribution": [],
+            "top_research_candidates": [],
+            "momentum_watch": [],
+            "risk_review": [],
+            "sentiment_watch": [],
+            "data_issues": [],
+        }
+        summary["scan_alerts"] = []
+        summary["screener_summary"] = "Run a watchlist scan to build a research queue."
+        return summary
+
+    data = pd.DataFrame([enrich_watchlist_row(row) for row in df.to_dict(orient="records")])
+    ok = data[data.get("status", "").astype(str).str.lower() == "ok"].copy() if "status" in data else data.iloc[0:0].copy()
+    issues = data[data.get("status", "").astype(str).str.lower() == "failed"].copy() if "status" in data else data.iloc[0:0].copy()
+
+    research = ok[ok.get("watchlist_bucket", "") == "Research queue"].copy() if not ok.empty else ok.copy()
+    momentum = ok[ok.get("watchlist_bucket", "") == "Momentum watch"].copy() if not ok.empty else ok.copy()
+    risk = ok[ok.get("watchlist_bucket", "") == "Risk review"].copy() if not ok.empty else ok.copy()
+    low = ok[ok.get("watchlist_bucket", "") == "Low priority"].copy() if not ok.empty else ok.copy()
+    sentiment_watch = ok[ok.get("sentiment_label", "").astype(str).str.contains("Caution|Negative|Bearish", case=False, na=False)].copy() if not ok.empty and "sentiment_label" in ok else ok.iloc[0:0].copy()
+
+    average_score = float(ok["meroq_score"].mean()) if not ok.empty and "meroq_score" in ok else None
+    top_candidates = _records_from_df(research if not research.empty else ok, limit=5, sort_by="research_priority", ascending=False)
+    summary = {
+        "tickers_scanned": int(len(data)),
+        "ready_count": int(len(ok)),
+        "issue_count": int(len(issues)),
+        "research_queue_count": int(len(research)),
+        "momentum_watch_count": int(len(momentum)),
+        "risk_review_count": int(len(risk)),
+        "low_priority_count": int(len(low)),
+        "average_meroq_score": round(average_score, 2) if average_score is not None and np.isfinite(average_score) else None,
+        "best_candidate_ticker": top_candidates[0].get("ticker") if top_candidates else None,
+        "grade_distribution": _grade_distribution(ok),
+        "top_research_candidates": top_candidates,
+        "momentum_watch": _records_from_df(momentum, limit=5, sort_by="research_priority", ascending=False),
+        "risk_review": _records_from_df(risk, limit=5, sort_by="risk_loss_gt_5pct", ascending=False),
+        "sentiment_watch": _records_from_df(sentiment_watch, limit=5, sort_by="research_priority", ascending=False),
+        "data_issues": _records_from_df(issues, limit=8, sort_by="ticker", ascending=True),
+    }
+    summary["scan_alerts"] = build_watchlist_alerts(summary)
+    if summary["best_candidate_ticker"]:
+        summary["screener_summary"] = (
+            f"{summary['best_candidate_ticker']} leads the research queue; "
+            f"{summary['risk_review_count']} ready name{'s' if summary['risk_review_count'] != 1 else ''} need risk review."
+        )
+    else:
+        summary["screener_summary"] = "No high-priority research candidates yet; review risk and data-issue queues first."
+    return summary
+
+
 def _progress(progress_callback: Callable[[dict], None] | None, payload: dict) -> None:
     if progress_callback is not None:
         progress_callback(payload)
@@ -178,7 +420,7 @@ def scan_single_ticker(
         status="ok",
     )
 
-    return {
+    row = {
         "ticker": symbol,
         "status": "ok",
         "latest_close": round(latest_close, 2),
@@ -203,6 +445,7 @@ def scan_single_ticker(
         "model_accuracy": float(metrics.get("accuracy", np.nan)),
         "model_roc_auc": float(metrics.get("roc_auc", np.nan)) if pd.notna(metrics.get("roc_auc")) else np.nan,
     }
+    return enrich_watchlist_row(row)
 
 
 def scan_watchlist(
@@ -251,7 +494,7 @@ def scan_watchlist(
             _progress(progress_callback, {"status": "complete", "ticker": symbol, "index": idx, "total": total, "detail": f"score {row.get('meroq_score')}"})
         except Exception as exc:  # Keep one bad ticker from breaking the whole scan.
             message = friendly_scan_error(symbol, exc)
-            rows.append({"ticker": symbol, "status": "failed", "error": message})
+            rows.append(enrich_watchlist_row({"ticker": symbol, "status": "failed", "error": message}))
             _progress(progress_callback, {"status": "failed", "ticker": symbol, "index": idx, "total": total, "detail": message})
 
     df = pd.DataFrame(rows)
@@ -261,27 +504,17 @@ def scan_watchlist(
 
 
 def summarize_watchlist_scan(df: pd.DataFrame) -> dict:
-    """Summarize a watchlist scan for UI cards."""
-    if df is None or df.empty:
-        return {
-            "tickers_scanned": 0,
-            "bullish_count": 0,
-            "positive_sentiment_count": 0,
-            "high_risk_count": 0,
-        }
+    """Summarize a watchlist scan for UI cards and screener command-center panels."""
+    summary = summarize_watchlist_command_center(df)
+    # Backward-compatible aliases retained for older UI/API consumers.
+    summary["bullish_count"] = 0
+    summary["positive_sentiment_count"] = 0
+    summary["high_risk_count"] = 0
 
-    ok = df[df.get("status", "") == "ok"].copy()
-    if ok.empty:
-        return {
-            "tickers_scanned": 0,
-            "bullish_count": 0,
-            "positive_sentiment_count": 0,
-            "high_risk_count": 0,
-        }
-
-    return {
-        "tickers_scanned": int(len(ok)),
-        "bullish_count": int((ok["final_signal"].astype(str).str.lower() == "bullish").sum()) if "final_signal" in ok else 0,
-        "positive_sentiment_count": int((ok["sentiment_label"].astype(str).str.lower() == "positive").sum()) if "sentiment_label" in ok else 0,
-        "high_risk_count": int((ok["risk_label"].astype(str).str.contains("High", case=False, na=False)).sum()) if "risk_label" in ok else 0,
-    }
+    if df is not None and not df.empty:
+        ok = df[df.get("status", "") == "ok"].copy()
+        if not ok.empty:
+            summary["bullish_count"] = int((ok["final_signal"].astype(str).str.lower() == "bullish").sum()) if "final_signal" in ok else 0
+            summary["positive_sentiment_count"] = int((ok["sentiment_label"].astype(str).str.lower() == "positive").sum()) if "sentiment_label" in ok else 0
+            summary["high_risk_count"] = int((ok["risk_label"].astype(str).str.contains("High", case=False, na=False)).sum()) if "risk_label" in ok else 0
+    return summary

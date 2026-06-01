@@ -145,3 +145,14 @@ Holdings may also include:
 
 The research-weighted scenario is a local score/risk diagnostic, not a portfolio optimizer or allocation recommendation.
 
+
+## Watchlist screener fields
+
+Release 1.9.5 expands watchlist rows from `POST /watchlist/scan` and `POST /watchlist/scan-one` with screener-friendly fields:
+
+- `watchlist_bucket`: `Research queue`, `Momentum watch`, `Risk review`, `Low priority`, or `Data issue`
+- `research_priority`: local 0-100 triage priority derived from Meroq Score, probability, sentiment, grade, and downside risk
+- `evidence_count`: count of scored recent headlines available for the row
+- `scan_note`: short plain-English reason for the row's queue
+
+`POST /watchlist/scan` summaries also include command-center fields such as `ready_count`, `issue_count`, `research_queue_count`, `momentum_watch_count`, `risk_review_count`, `top_research_candidates`, `risk_review`, `sentiment_watch`, `grade_distribution`, and `scan_alerts`. These are local research-triage fields, not trading instructions.
