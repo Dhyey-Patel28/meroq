@@ -127,3 +127,21 @@ Release 1.9.3 expands `POST /portfolio/analyze` with nested summary fields for p
 - `portfolio_alerts`
 
 Holdings also include `score_contribution_share`, `downside_contribution_share`, and `exposure_note` when the required source fields are available.
+
+## Portfolio scenario-lab fields
+
+Release 1.9.4 adds diagnostic what-if fields to `POST /portfolio/analyze`:
+
+- `scenario_comparison` with current, equal-weight, and research-weighted scenario rows
+- `research_weighted_scenario` as the scenario row used for quick display
+- `research_adds` and `research_trims` ranked by `research_weight_delta`
+- `scenario_disclaimer` for UI display
+
+Holdings may also include:
+
+- `research_weight`
+- `research_weight_delta`
+- `allocation_review`
+
+The research-weighted scenario is a local score/risk diagnostic, not a portfolio optimizer or allocation recommendation.
+

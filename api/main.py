@@ -18,7 +18,7 @@ from src.portfolio import build_portfolio_view, parse_portfolio_weights, portfol
 from src.services import SingleTickerAnalysisRequest, run_single_ticker_analysis
 from src.watchlist import friendly_scan_error, scan_single_ticker, scan_watchlist, summarize_watchlist_scan
 
-APP_VERSION = "1.9.3"
+APP_VERSION = "1.9.4"
 
 
 class TickerAnalysisPayload(BaseModel):

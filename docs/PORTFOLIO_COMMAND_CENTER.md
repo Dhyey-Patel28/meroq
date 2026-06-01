@@ -95,3 +95,9 @@ This is still a transparent diagnostic layer. It does not yet model:
 - broker positions
 
 Those are future upgrades. The 1.9.3 release focuses on making existing local signals more understandable and action-oriented.
+
+## Scenario lab
+
+Release 1.9.4 adds a scenario lab above the charts. It compares current weights, equal weights, and a research-weighted diagnostic scenario. The frontend also shows scenario adds/trims based on `research_weight_delta`.
+
+The scenario lab is intentionally framed as a what-if diagnostic, not allocation advice.

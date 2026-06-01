@@ -46,6 +46,9 @@ function symbolForText(value: string) {
 function formatCell(value: ApiRecord[keyof ApiRecord], column: string) {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "number") {
+    if (column.includes("delta") && Math.abs(value) <= 1.5) {
+      return `${value >= 0 ? "+" : ""}${formatPct(value, 1)}`;
+    }
     if (column.includes("probability") || column.includes("weight") || column.includes("return") || column.includes("loss_gt") || column.includes("score_pct") || column.includes("share")) {
       if (Math.abs(value) <= 1.5) return formatPct(value, 1);
     }
@@ -70,7 +73,7 @@ function renderDecoratedCell(column: string, value: ApiRecord[keyof ApiRecord], 
     return <StatusPill label={`${symbolForText(text)} ${label}`} tone={toneFromText(text)} />;
   }
 
-  if (["final_signal", "sentiment_label", "risk_label"].includes(column) && value) {
+  if (["final_signal", "sentiment_label", "risk_label", "allocation_review"].includes(column) && value) {
     const text = String(value);
     return <StatusPill label={`${symbolForText(text)} ${text}`} tone={toneFromText(text)} />;
   }

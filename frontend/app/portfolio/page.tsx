@@ -9,7 +9,7 @@ import { MetricCard } from "@/components/MetricCard";
 import { PageShell } from "@/components/PageShell";
 import { StockDetailModal } from "@/components/StockDetailModal";
 import { StatusPill } from "@/components/StatusPill";
-import { analyzePortfolio, formatNumber, formatPct, parseTickerList, type ApiRecord } from "@/lib/api";
+import { analyzePortfolio, formatNumber, formatPct, formatSignedPctPoints, parseTickerList, type ApiRecord } from "@/lib/api";
 
 const holdingColumns = [
   "ticker",
@@ -21,6 +21,8 @@ const holdingColumns = [
   "risk_label",
   "risk_loss_gt_5pct",
   "downside_contribution_share",
+  "research_weight_delta",
+  "allocation_review",
   "meroq_score",
   "exposure_note",
 ];
@@ -79,6 +81,53 @@ function contributionCopy(row: ApiRecord | undefined, metric: "risk" | "score") 
   return `${String(row.ticker)} contributes ${formatNumber(row.weighted_meroq_score)} weighted Meroq points.`;
 }
 
+function signedNumber(value: unknown, decimals = 1) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "N/A";
+  return `${number >= 0 ? "+" : ""}${number.toFixed(decimals)}`;
+}
+
+function deltaTone(value: unknown): "neutral" | "positive" | "negative" | "warning" {
+  const number = Number(value);
+  if (!Number.isFinite(number) || Math.abs(number) < 0.0005) return "neutral";
+  return number > 0 ? "positive" : "warning";
+}
+
+function ScenarioCard({ scenario }: { scenario: ApiRecord }) {
+  const isCurrent = scenario.scenario_key === "current";
+  return (
+    <article className={`scenario-card ${isCurrent ? "is-current" : ""}`}>
+      <div className="card-heading-row">
+        <div>
+          <p className="status-label">Scenario</p>
+          <h3>{String(scenario.label ?? "Portfolio scenario")}</h3>
+        </div>
+        <GradeBadge grade={scenario.portfolio_grade} label={scenario.portfolio_grade_label} compact />
+      </div>
+      <p className="muted small scenario-description">{String(scenario.description ?? "Transparent what-if view based on current holdings.")}</p>
+      <div className="scenario-metrics">
+        <div>
+          <span>Score</span>
+          <strong>{formatNumber(scenario.weighted_meroq_score)}</strong>
+          {!isCurrent ? <em className={`delta-pill tone-${deltaTone(scenario.score_delta)}`}>{signedNumber(scenario.score_delta)} pts</em> : null}
+        </div>
+        <div>
+          <span>Downside</span>
+          <strong>{formatPct(scenario.weighted_downside_probability)}</strong>
+          {!isCurrent ? <em className={`delta-pill tone-${deltaTone(Number(scenario.downside_delta) * -1)}`}>{formatSignedPctPoints(scenario.downside_delta)}</em> : null}
+        </div>
+        <div>
+          <span>Up prob.</span>
+          <strong>{formatPct(scenario.weighted_up_probability)}</strong>
+          {!isCurrent ? <em className={`delta-pill tone-${deltaTone(scenario.up_probability_delta)}`}>{formatSignedPctPoints(scenario.up_probability_delta)}</em> : null}
+        </div>
+      </div>
+      <p className="muted small scenario-summary">{String(scenario.summary ?? "Run a scan to compare this scenario.")}</p>
+    </article>
+  );
+}
+
+
 function InsightCard({ alert }: { alert: ApiRecord }) {
   const tone = toneForSeverity(alert.severity);
   return (
@@ -95,7 +144,7 @@ function InsightCard({ alert }: { alert: ApiRecord }) {
   );
 }
 
-function ContributorList({ title, rows, metric }: { title: string; rows: ApiRecord[]; metric: "risk" | "score" | "weak" }) {
+function ContributorList({ title, rows, metric }: { title: string; rows: ApiRecord[]; metric: "risk" | "score" | "weak" | "shift" }) {
   return (
     <section className="card contributor-card">
       <div className="card-heading-row">
@@ -108,10 +157,16 @@ function ContributorList({ title, rows, metric }: { title: string; rows: ApiReco
             <div className="contributor-row" key={`${title}-${String(row.ticker)}`}>
               <div>
                 <strong>{String(row.ticker)}</strong>
-                <p className="muted small">{String(row.exposure_note ?? row.risk_label ?? "Portfolio contributor")}</p>
+                <p className="muted small">{String(row.allocation_review ?? row.exposure_note ?? row.risk_label ?? "Portfolio contributor")}</p>
               </div>
               <div className="contributor-metric">
-                {metric === "risk" ? formatPct(row.downside_contribution_share) : metric === "score" ? formatNumber(row.weighted_meroq_score) : formatNumber(row.meroq_score)}
+                {metric === "risk"
+                  ? formatPct(row.downside_contribution_share)
+                  : metric === "score"
+                    ? formatNumber(row.weighted_meroq_score)
+                    : metric === "shift"
+                      ? formatSignedPctPoints(row.research_weight_delta)
+                      : formatNumber(row.meroq_score)}
               </div>
             </div>
           ))}
@@ -171,6 +226,9 @@ export default function PortfolioPage() {
   const topRiskContributors = useMemo(() => asRecordArray(summary?.top_risk_contributors), [summary]);
   const topScoreContributors = useMemo(() => asRecordArray(summary?.top_score_contributors), [summary]);
   const weakestHoldings = useMemo(() => asRecordArray(summary?.weakest_holdings), [summary]);
+  const scenarioComparison = useMemo(() => asRecordArray(summary?.scenario_comparison), [summary]);
+  const researchAdds = useMemo(() => asRecordArray(summary?.research_adds), [summary]);
+  const researchTrims = useMemo(() => asRecordArray(summary?.research_trims), [summary]);
   const bullishWeight = Number(summary?.bullish_weight ?? 0);
   const bearishWeight = Number(summary?.bearish_weight ?? 0);
   const neutralWeight = Math.max(0, 1 - bullishWeight - bearishWeight);
@@ -243,6 +301,28 @@ export default function PortfolioPage() {
             <p className="plain-summary">{sentence}</p>
           </section>
 
+          {scenarioComparison.length ? (
+            <section className="card scenario-lab" style={{ marginTop: 18 }}>
+              <div className="card-heading-row">
+                <div>
+                  <p className="status-label">Scenario lab</p>
+                  <h2>Compare current, equal-weight, and research-weighted views.</h2>
+                </div>
+                <StatusPill label="What-if only" tone="neutral" />
+              </div>
+              <p className="muted small">{String(summary.scenario_disclaimer ?? "Scenario weights are diagnostic what-if views, not allocation advice.")}</p>
+              <div className="scenario-grid">
+                {scenarioComparison.map((scenario) => (
+                  <ScenarioCard scenario={scenario} key={String(scenario.scenario_key ?? scenario.label)} />
+                ))}
+              </div>
+              <div className="scenario-action-grid">
+                <ContributorList title="Scenario adds" rows={researchAdds} metric="shift" />
+                <ContributorList title="Scenario trims" rows={researchTrims} metric="shift" />
+              </div>
+            </section>
+          ) : null}
+
           {alerts.length ? (
             <section className="insight-grid" style={{ marginTop: 18 }}>
               {alerts.map((alert, index) => (
@@ -251,7 +331,7 @@ export default function PortfolioPage() {
             </section>
           ) : null}
 
-          <section className="grid cols-3 align-start" style={{ marginTop: 18 }}>
+          <section className="grid cols-3 align-start portfolio-chart-grid" style={{ marginTop: 18 }}>
             <DonutChart
               title="Holding weights"
               subtitle="Top allocations by current portfolio weights"

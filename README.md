@@ -1,9 +1,9 @@
 # Meroq
 
-> Release 1.9.3 turns the portfolio page into a command center with concentration checks, exposure drivers, grade distribution, and ranked risk/score contributors.
+> Release 1.9.4 adds a portfolio scenario lab with current, equal-weight, and research-weighted what-if views, plus responsive chart polish for the portfolio command center.
 
 
-Current release: 1.9.3 — Portfolio command center.
+Current release: 1.9.4 — Portfolio scenario lab.
 
 Meroq is a local market-intelligence project for stock movement research. It combines price features, machine-learning signals, news sentiment, Monte Carlo risk simulation, watchlist scanning, portfolio exposure views, a Streamlit dashboard, a FastAPI backend, and a growing Next.js frontend.
 
@@ -11,9 +11,9 @@ Meroq is a local market-intelligence project for stock movement research. It com
 
 ## Current release
 
-**1.9.3 — Portfolio command center**
+**1.9.4 — Portfolio scenario lab**
 
-Meroq now turns weighted holdings into a portfolio command center: concentration label, largest position, grade distribution, top downside drivers, top score contributors, weakest setups, and plain-English insight cards.
+Meroq now compares current weights against equal-weight and research-weighted what-if scenarios. The scenario lab shows score, downside, up-probability, concentration, adds/trims, and clear disclaimers that these are diagnostic views rather than allocation advice.
 
 ## Main capabilities
 
@@ -27,7 +27,7 @@ Meroq now turns weighted holdings into a portfolio command center: concentration
 - Meroq Grade and component rating labels
 - Watchlist intelligence with Meroq Score
 - Watchlist presets, input cleanup, and progressive scan controls
-- Portfolio command center with exposure, concentration, grade distribution, and driver analysis
+- Portfolio command center with exposure, concentration, grade distribution, driver analysis, and scenario lab
 - Markdown/CSV reporting
 - FastAPI backend for reusable analysis endpoints
 - Next.js frontend client for the API
