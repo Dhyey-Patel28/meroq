@@ -1,9 +1,9 @@
 # Meroq
 
-> Release 1.9.1 adds Meroq Grades: local A-F research labels with component grades for momentum, risk, sentiment, model confidence, and data quality.
+> Release 1.9.2 adds a target-aware sentiment evaluation harness with a local gold dataset, accuracy metrics, and regression gates for trust-critical headline scoring.
 
 
-Current release: 1.9.1 — Meroq Grades and component ratings.
+Current release: 1.9.2 — Sentiment evaluation harness.
 
 Meroq is a local market-intelligence project for stock movement research. It combines price features, machine-learning signals, news sentiment, Monte Carlo risk simulation, watchlist scanning, portfolio exposure views, a Streamlit dashboard, a FastAPI backend, and a growing Next.js frontend.
 
@@ -11,9 +11,9 @@ Meroq is a local market-intelligence project for stock movement research. It com
 
 ## Current release
 
-**1.9.1 — Meroq Grades and component ratings**
+**1.9.2 — Sentiment evaluation harness**
 
-Meroq now adds local A-F research grades on top of score, signal, risk, sentiment, and model confidence. Grades are designed as attention labels, not buy/sell recommendations.
+Meroq now includes a local gold-labeled headline benchmark and evaluation CLI for target-aware sentiment accuracy. This makes sentiment quality measurable instead of relying on ad hoc inspection.
 
 ## Main capabilities
 
@@ -22,6 +22,7 @@ Meroq now adds local A-F research grades on top of score, signal, risk, sentimen
 - Model comparison and walk-forward backtesting
 - Monte Carlo risk simulation
 - Company-aware news fetching and target-aware sentiment analysis
+- Sentiment gold benchmark and evaluation CLI
 - Sentiment-aware signal overlay
 - Meroq Grade and component rating labels
 - Watchlist intelligence with Meroq Score
@@ -186,3 +187,17 @@ These are ignored by `.gitignore`.
 - CSS alignment values were updated for better browser compatibility and to remove the Autoprefixer warning.
 - The frontend package keeps the PostCSS npm override to avoid the audit issue without downgrading Next.js.
 - D3 remains on the roadmap; this release keeps the chart lightweight while the API contract stabilizes.
+
+## Sentiment evaluation
+
+Evaluate the local target-aware sentiment benchmark:
+
+```powershell
+python scripts/evaluate_sentiment.py --engine lightweight
+```
+
+Use regression gates before changing sentiment rules:
+
+```powershell
+python scripts/evaluate_sentiment.py --engine lightweight --fail-under-accuracy 0.90 --fail-under-cautionary-recall 0.90
+```

@@ -63,3 +63,12 @@ The layer adds these headline fields:
 Known failure mode fixed: generic sentiment can mark “3 Reasons PLAY is Risky and 1 Stock to Buy Instead” as positive because it sees “stock to buy.” Target-aware scoring recognizes that PLAY is the risky target and the buy recommendation is for another stock.
 
 Low-relevance and uncertain headlines are excluded from ticker-level sentiment aggregation when possible so broad or ambiguous headlines do not distort the overlay.
+
+
+## Evaluation harness
+
+Release 1.9.2 adds a local gold-labeled benchmark at `data/sentiment_gold/financial_headlines_gold.csv` and a CLI at `scripts/evaluate_sentiment.py`. Use it before changing target-aware rules or model selection. The benchmark emphasizes relevance, target sentiment, cautionary recall, and ambiguous ticker collisions.
+
+```powershell
+python scripts/evaluate_sentiment.py --engine lightweight --fail-under-accuracy 0.90 --fail-under-cautionary-recall 0.90
+```
