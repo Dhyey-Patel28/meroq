@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.9.4 — Portfolio scenario lab
+
+### Added
+- Added current, equal-weight, and research-weighted portfolio scenario comparison fields to `POST /portfolio/analyze`.
+- Added research-weight and research-weight-delta fields for holdings so users can see what the scenario would add or trim.
+- Added scenario add/trim lists and allocation-review notes for portfolio triage.
+- Added portfolio scenario lab cards to the Next.js portfolio page.
+- Added regression coverage for scenario comparison output.
+
+### Changed
+- Polished portfolio chart layout so donut legends no longer crowd or overflow narrow command-center cards.
+- Bumped API metadata to 1.9.4 and frontend package version to 0.3.9.
+
+### Notes
+- Scenario weights are transparent diagnostic what-if views. They are not allocation advice and do not require paid data.
+
 ## 1.9.3 — Portfolio command center
 
 ### Added

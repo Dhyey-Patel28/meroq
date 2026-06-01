@@ -132,3 +132,76 @@ def test_build_portfolio_view_adds_command_center_insights() -> None:
     assert summary["weakest_holdings"][0]["ticker"] == "MARA"
     assert any(row["grade"] == "F" and row["weight"] > 0 for row in summary["grade_distribution"])
     assert any(alert["title"] == "Top downside driver" for alert in summary["portfolio_alerts"])
+
+
+def test_build_portfolio_view_adds_scenario_lab_fields() -> None:
+    scan = pd.DataFrame(
+        [
+            {
+                "ticker": "AAPL",
+                "status": "ok",
+                "latest_close": 100,
+                "return_1d": 0.01,
+                "final_up_probability": 0.64,
+                "sentiment_score": 0.3,
+                "risk_loss_gt_5pct": 0.10,
+                "risk_positive_probability": 0.65,
+                "risk_median_return": 0.03,
+                "meroq_score": 76,
+                "meroq_grade": "B",
+                "final_signal": "Bullish",
+                "sentiment_label": "Positive",
+                "risk_label": "Balanced risk profile",
+            },
+            {
+                "ticker": "MARA",
+                "status": "ok",
+                "latest_close": 20,
+                "return_1d": -0.02,
+                "final_up_probability": 0.36,
+                "sentiment_score": -0.35,
+                "risk_loss_gt_5pct": 0.55,
+                "risk_positive_probability": 0.3,
+                "risk_median_return": -0.04,
+                "meroq_score": 28,
+                "meroq_grade": "F",
+                "final_signal": "Bearish",
+                "sentiment_label": "Cautionary",
+                "risk_label": "High downside risk",
+            },
+            {
+                "ticker": "MSFT",
+                "status": "ok",
+                "latest_close": 220,
+                "return_1d": 0.0,
+                "final_up_probability": 0.56,
+                "sentiment_score": 0.08,
+                "risk_loss_gt_5pct": 0.16,
+                "risk_positive_probability": 0.55,
+                "risk_median_return": 0.01,
+                "meroq_score": 61,
+                "meroq_grade": "C",
+                "final_signal": "Neutral",
+                "sentiment_label": "Neutral",
+                "risk_label": "Balanced risk profile",
+            },
+        ]
+    )
+    weights = parse_portfolio_weights(["AAPL", "MARA", "MSFT"], "AAPL:25,MARA:55,MSFT:20")
+    holdings, summary = build_portfolio_view(scan, weights)
+
+    assert "research_weight" in holdings.columns
+    assert "research_weight_delta" in holdings.columns
+    assert "allocation_review" in holdings.columns
+    assert round(float(holdings["research_weight"].sum()), 6) == 1.0
+
+    scenarios = summary["scenario_comparison"]
+    assert [row["scenario_key"] for row in scenarios] == ["current", "equal_weight", "research_weighted"]
+    research = summary["research_weighted_scenario"]
+    assert research["scenario_key"] == "research_weighted"
+    assert research["weighted_downside_probability"] < summary["weighted_downside_probability"]
+    assert research["score_delta"] > 0
+
+    mara = holdings.loc[holdings["ticker"] == "MARA"].iloc[0]
+    assert float(mara["research_weight_delta"]) < 0
+    assert "trims" in str(mara["allocation_review"]).lower()

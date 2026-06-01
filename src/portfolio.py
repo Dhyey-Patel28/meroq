@@ -132,7 +132,12 @@ def build_portfolio_view(scan_df: pd.DataFrame, weights_df: pd.DataFrame) -> tup
     total_downside_contribution = _safe_sum(holdings["weighted_downside_probability"])
     holdings["score_contribution_share"] = _share_series(holdings["weighted_meroq_score"], total_score_contribution)
     holdings["downside_contribution_share"] = _share_series(holdings["weighted_downside_probability"], total_downside_contribution)
+
+    research_weights = _research_weight_series(holdings)
+    holdings["research_weight"] = research_weights
+    holdings["research_weight_delta"] = holdings["research_weight"] - holdings["weight"]
     holdings["exposure_note"] = holdings.apply(_holding_exposure_note, axis=1)
+    holdings["allocation_review"] = holdings.apply(_allocation_review_note, axis=1)
 
     weighted_meroq_score = float(holdings["weighted_meroq_score"].sum())
     holding_count = int(len(holdings))
@@ -144,6 +149,10 @@ def build_portfolio_view(scan_df: pd.DataFrame, weights_df: pd.DataFrame) -> tup
     top_risk_contributors = _portfolio_records(holdings, "weighted_downside_probability", 3)
     weakest_holdings = _portfolio_records(holdings, "meroq_score", 3, ascending=True)
     highest_risk_holdings = _portfolio_records(holdings, "risk_loss_gt_5pct", 3)
+    scenario_comparison = build_portfolio_scenarios(holdings)
+    research_scenario = next((row for row in scenario_comparison if row.get("scenario_key") == "research_weighted"), {})
+    research_adds = _allocation_shift_records(holdings, positive=True, limit=3)
+    research_trims = _allocation_shift_records(holdings, positive=False, limit=3)
 
     portfolio_grade = score_to_grade(weighted_meroq_score)
     summary = {
@@ -172,6 +181,12 @@ def build_portfolio_view(scan_df: pd.DataFrame, weights_df: pd.DataFrame) -> tup
         "top_risk_contributors": top_risk_contributors,
         "weakest_holdings": weakest_holdings,
         "highest_risk_holdings": highest_risk_holdings,
+        # 1.9.4 scenario-lab fields.
+        "scenario_comparison": scenario_comparison,
+        "research_weighted_scenario": research_scenario,
+        "research_adds": research_adds,
+        "research_trims": research_trims,
+        "scenario_disclaimer": "Scenario weights are diagnostic what-if views, not allocation advice.",
     }
 
     # Backward-compatible aliases retained for existing app/report code.
@@ -201,6 +216,9 @@ def build_portfolio_view(scan_df: pd.DataFrame, weights_df: pd.DataFrame) -> tup
         "weighted_meroq_score",
         "score_contribution_share",
         "downside_contribution_share",
+        "research_weight",
+        "research_weight_delta",
+        "allocation_review",
         "exposure_note",
     ]
     available = [col for col in display_order if col in holdings.columns]
@@ -342,6 +360,11 @@ def _empty_summary() -> dict:
         "top_risk_contributors": [],
         "weakest_holdings": [],
         "highest_risk_holdings": [],
+        "scenario_comparison": [],
+        "research_weighted_scenario": {},
+        "research_adds": [],
+        "research_trims": [],
+        "scenario_disclaimer": "Scenario weights are diagnostic what-if views, not allocation advice.",
         "portfolio_alerts": [],
     }
 
@@ -443,6 +466,9 @@ def _portfolio_records(holdings: pd.DataFrame, sort_column: str, limit: int, asc
         "weighted_downside_probability",
         "score_contribution_share",
         "downside_contribution_share",
+        "research_weight",
+        "research_weight_delta",
+        "allocation_review",
         "exposure_note",
     ]
     available = [col for col in columns if col in holdings.columns]
@@ -451,6 +477,207 @@ def _portfolio_records(holdings: pd.DataFrame, sort_column: str, limit: int, asc
     for row in ranked[available].to_dict(orient="records"):
         records.append({key: _json_safe(value) for key, value in row.items()})
     return records
+
+
+def _allocation_shift_records(holdings: pd.DataFrame, *, positive: bool, limit: int) -> list[dict[str, Any]]:
+    if holdings.empty or "research_weight_delta" not in holdings.columns:
+        return []
+    deltas = pd.to_numeric(holdings["research_weight_delta"], errors="coerce").fillna(0.0)
+    mask = deltas > 0 if positive else deltas < 0
+    filtered = holdings.loc[mask].copy()
+    if filtered.empty:
+        return []
+    return _portfolio_records(filtered, "research_weight_delta", limit, ascending=not positive)
+
+
+def build_portfolio_scenarios(holdings: pd.DataFrame) -> list[dict[str, Any]]:
+    """Build transparent what-if allocation scenarios from existing scan rows.
+
+    The output is diagnostic. It compares the user's current weights with equal
+    weighting and a local research-weighted tilt that favors stronger Meroq
+    scores while penalizing downside-risk fields. It does not optimize a real
+    portfolio or provide allocation advice.
+    """
+    if holdings is None or holdings.empty:
+        return []
+
+    n = len(holdings)
+    current = _normalize_weight_series(holdings.get("weight", pd.Series(dtype=float)))
+    equal = pd.Series([1.0 / n] * n, index=holdings.index)
+    research = _research_weight_series(holdings)
+
+    scenarios = [
+        _scenario_metrics(
+            holdings,
+            current,
+            scenario_key="current",
+            label="Current weights",
+            description="Uses the weights you entered for the current scan.",
+        ),
+        _scenario_metrics(
+            holdings,
+            equal,
+            scenario_key="equal_weight",
+            label="Equal-weight check",
+            description="Shows how the same holdings look when each ticker has the same weight.",
+        ),
+        _scenario_metrics(
+            holdings,
+            research,
+            scenario_key="research_weighted",
+            label="Research-weighted scenario",
+            description="Tilts weight toward stronger local Meroq scores and away from higher downside-risk readings.",
+        ),
+    ]
+
+    baseline = scenarios[0]
+    for scenario in scenarios:
+        scenario["score_delta"] = float(scenario["weighted_meroq_score"] - baseline["weighted_meroq_score"])
+        scenario["up_probability_delta"] = float(scenario["weighted_up_probability"] - baseline["weighted_up_probability"])
+        scenario["downside_delta"] = float(scenario["weighted_downside_probability"] - baseline["weighted_downside_probability"])
+        scenario["high_risk_weight_delta"] = float(scenario["high_risk_weight"] - baseline["high_risk_weight"])
+        scenario["summary"] = _scenario_summary(scenario)
+    return scenarios
+
+
+def _scenario_metrics(
+    holdings: pd.DataFrame,
+    weights: pd.Series,
+    *,
+    scenario_key: str,
+    label: str,
+    description: str,
+) -> dict[str, Any]:
+    normalized = _normalize_weight_series(weights)
+    if normalized.empty:
+        normalized = pd.Series([1.0 / len(holdings)] * len(holdings), index=holdings.index)
+
+    weighted_meroq_score = _weighted_sum(holdings, "meroq_score", normalized)
+    largest_idx = normalized.idxmax() if len(normalized) else None
+    largest_ticker = str(holdings.loc[largest_idx, "ticker"]) if largest_idx is not None and "ticker" in holdings else None
+    largest_weight = float(normalized.max()) if len(normalized) else 0.0
+    concentration_score = float((normalized ** 2).sum())
+    concentration_label = _concentration_label(largest_weight, concentration_score, len(holdings))
+
+    scenario = {
+        "scenario_key": scenario_key,
+        "label": label,
+        "description": description,
+        "weighted_meroq_score": weighted_meroq_score,
+        "portfolio_grade": score_to_grade(weighted_meroq_score),
+        "portfolio_grade_label": grade_label(score_to_grade(weighted_meroq_score)),
+        "weighted_up_probability": _weighted_sum(holdings, "final_up_probability", normalized),
+        "weighted_downside_probability": _weighted_sum(holdings, "risk_loss_gt_5pct", normalized),
+        "weighted_sentiment_score": _weighted_sum(holdings, "sentiment_score", normalized),
+        "high_risk_weight": _weighted_risk_share(holdings, normalized),
+        "largest_position_ticker": largest_ticker,
+        "largest_position_weight": largest_weight,
+        "concentration_score": concentration_score,
+        "concentration_label": concentration_label,
+    }
+    return {key: _json_safe(value) for key, value in scenario.items()}
+
+
+def _research_weight_series(holdings: pd.DataFrame) -> pd.Series:
+    if holdings is None or holdings.empty:
+        return pd.Series(dtype=float)
+
+    score = _numeric_series(holdings, "meroq_score", default=50.0).clip(lower=0, upper=100) / 100.0
+    up_probability = _numeric_series(holdings, "final_up_probability", default=0.5).clip(lower=0, upper=1)
+    sentiment = _numeric_series(holdings, "sentiment_score", default=0.0).clip(lower=-1, upper=1)
+    sentiment_component = (sentiment + 1.0) / 2.0
+    downside = _numeric_series(holdings, "risk_loss_gt_5pct", default=0.25).clip(lower=0, upper=1)
+
+    raw = 0.06 + (score * 0.58) + (up_probability * 0.23) + (sentiment_component * 0.13) - (downside * 0.42)
+
+    if "risk_label" in holdings:
+        high_risk = holdings["risk_label"].astype(str).str.contains("High|Elevated", case=False, na=False)
+        raw.loc[high_risk] = raw.loc[high_risk] * 0.72
+    raw.loc[score < 0.42] = raw.loc[score < 0.42] * 0.72
+    raw.loc[score >= 0.70] = raw.loc[score >= 0.70] * 1.08
+
+    raw = raw.clip(lower=0.025)
+    return _cap_and_redistribute(_normalize_weight_series(raw), cap=0.28)
+
+
+def _normalize_weight_series(values: pd.Series) -> pd.Series:
+    series = pd.to_numeric(values, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(lower=0.0)
+    total = float(series.sum())
+    if total <= 0 and len(series):
+        return pd.Series([1.0 / len(series)] * len(series), index=series.index)
+    if total <= 0:
+        return series
+    return series / total
+
+
+def _cap_and_redistribute(weights: pd.Series, cap: float = 0.28, max_iter: int = 12) -> pd.Series:
+    capped = _normalize_weight_series(weights).copy()
+    if capped.empty or cap <= 0:
+        return capped
+
+    for _ in range(max_iter):
+        over = capped > cap
+        if not bool(over.any()):
+            break
+        excess = float((capped.loc[over] - cap).sum())
+        capped.loc[over] = cap
+        under = capped < cap
+        under_total = float(capped.loc[under].sum())
+        if excess <= 0 or under_total <= 0:
+            break
+        capped.loc[under] = capped.loc[under] + (capped.loc[under] / under_total) * excess
+
+    return _normalize_weight_series(capped)
+
+
+def _numeric_series(holdings: pd.DataFrame, column: str, default: float = 0.0) -> pd.Series:
+    if column not in holdings:
+        return pd.Series([default] * len(holdings), index=holdings.index, dtype=float)
+    return pd.to_numeric(holdings[column], errors="coerce").fillna(default).astype(float)
+
+
+def _weighted_sum(holdings: pd.DataFrame, column: str, weights: pd.Series) -> float:
+    if column not in holdings:
+        return 0.0
+    values = _numeric_series(holdings, column)
+    aligned = weights.reindex(holdings.index).fillna(0.0)
+    return float((values * aligned).sum())
+
+
+def _weighted_risk_share(holdings: pd.DataFrame, weights: pd.Series) -> float:
+    if "risk_label" not in holdings:
+        return 0.0
+    mask = holdings["risk_label"].astype(str).str.contains("High|Elevated", case=False, na=False)
+    return float(weights.reindex(holdings.index).fillna(0.0).loc[mask].sum())
+
+
+def _scenario_summary(scenario: dict[str, Any]) -> str:
+    score_delta = float(scenario.get("score_delta", 0.0) or 0.0)
+    downside_delta = float(scenario.get("downside_delta", 0.0) or 0.0)
+    concentration = scenario.get("concentration_label", "Unknown")
+    if scenario.get("scenario_key") == "current":
+        return "Baseline view using the weights entered for this scan."
+
+    score_word = "raises" if score_delta >= 0 else "lowers"
+    downside_word = "lowers" if downside_delta <= 0 else "raises"
+    return (
+        f"This scenario {score_word} weighted Meroq Score by {abs(score_delta):.1f} points "
+        f"and {downside_word} weighted downside probability by {abs(downside_delta):.1%}; "
+        f"concentration reads {str(concentration).lower()}."
+    )
+
+
+def _allocation_review_note(row: pd.Series) -> str:
+    delta = _safe_float(row.get("research_weight_delta"))
+    score = _safe_float(row.get("meroq_score"), 50.0)
+    downside = _safe_float(row.get("risk_loss_gt_5pct"))
+    if delta >= 0.035:
+        return "Research scenario adds weight"
+    if delta <= -0.035:
+        return "Research scenario trims weight"
+    if score < 42 and downside >= 0.32:
+        return "Weak/high-risk holding to review"
+    return "Near current scenario weight"
 
 
 def _holding_exposure_note(row: pd.Series) -> str:
