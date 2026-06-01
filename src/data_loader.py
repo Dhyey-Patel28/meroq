@@ -5,7 +5,10 @@ import re
 import sqlite3
 
 import pandas as pd
-import yfinance as yf
+try:
+    import yfinance as yf
+except Exception:  # pragma: no cover - optional import guard for metadata-only tests
+    yf = None
 
 from src.storage import MARKET_DB_PATH, record_price_metadata
 
@@ -61,6 +64,9 @@ def fetch_price_data(
 
     if not ticker:
         raise ValueError("Ticker cannot be empty.")
+
+    if yf is None:
+        raise RuntimeError("yfinance is required to download market price data. Install project requirements first.")
 
     df = yf.download(
         tickers=ticker,
